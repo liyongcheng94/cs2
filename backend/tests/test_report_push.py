@@ -144,3 +144,45 @@ def test_gc_raw_demo(client, tmp_path):
     p.write_bytes(b"abc")
     gc_raw_demo(p)
     assert not p.exists()
+
+
+def test_push_report_update_404_selfheals_to_create(client, monkeypatch):
+    """
+    Given Report 行的 mv_uuid 属于旧实例（目标实例中不存在，PUT 404）
+    When  push_report
+    Then  自愈清空 uuid 转新建，最终 created=True 且行内 uuid 更新为新笔记
+    """
+    import json as _json
+    from sqlmodel import select
+
+    import app.services.report_push as rp
+    from app.database import session_factory
+    from app.models import Report
+    from app.services.mindvault_client import MindVaultClient
+
+    state = {"created": 0, "uuid": "new-uuid-9"}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/topics":
+            return httpx.Response(200, json=[]) if request.method == "GET" else httpx.Response(201, json={"id": 3, "name": "CS2复盘"})
+        if request.method == "PUT" and request.url.path.startswith("/api/items/"):
+            return httpx.Response(404, json={"detail": "笔记不存在"})
+        if request.url.path == "/api/mcp":
+            state["created"] += 1
+            body = _json.loads(request.content)
+            return httpx.Response(200, json={"jsonrpc": "2.0", "id": body["id"], "result": {"content": [{"type": "text", "text": _json.dumps({"item_id": 2, "uuid": state["uuid"], "title": body["params"]["arguments"]["title"]})}], "isError": False}})
+        return httpx.Response(404)
+
+    monkeypatch.setattr(rp, "_new_mv", lambda: MindVaultClient(base_url="http://stub", transport=httpx.MockTransport(handler)))
+
+    with session_factory() as s:
+        s.add(Report(match_id="PVP@HEAL", prompt_version=PromptVersion,
+                     source_hash=compute_source_hash("PVP@HEAL", PromptVersion),
+                     title="t", content_md="old", mv_uuid="stale-uuid"))
+        s.commit()
+
+    out = asyncio.run(rp.push_report(_fake_analysis("PVP@HEAL"), "new md", prompt_version=PromptVersion))
+    assert out["created"] is True and out["uuid"] == "new-uuid-9"
+    with session_factory() as s:
+        row = s.exec(select(Report).where(Report.match_id == "PVP@HEAL")).first()
+        assert row.mv_uuid == "new-uuid-9" and row.pushed is True

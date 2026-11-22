@@ -59,24 +59,41 @@ async def push_report(
         row.degraded = degraded
         try:
             mv = _new_mv()
-            if is_update:
-                await mv.update_note(row.mv_uuid, content=content_md, title=row.title)
-                out["uuid"] = row.mv_uuid
-                logger.info(f"[推送] matchId={match_id} 更新已有笔记 uuid={row.mv_uuid}")
-            else:
+            created_now = False
+            try:
+                if is_update:
+                    await mv.update_note(row.mv_uuid, content=content_md, title=row.title)
+                    out["uuid"] = row.mv_uuid
+                    logger.info(f"[推送] matchId={match_id} 更新已有笔记 uuid={row.mv_uuid}")
+                else:
+                    raise _NoteMissing()  # 统一走新建分支
+            except _NoteMissing:
                 pushed = await mv.push_note(row.title, content_md, topic_name=REPORT_TOPIC)
                 row.mv_uuid = pushed["uuid"]
                 out["uuid"] = pushed["uuid"]
+                created_now = True
                 logger.info(f"[推送] matchId={match_id} 新建笔记 uuid={pushed['uuid']}")
             row.pushed = True
-            out["created"] = not is_update
+            out["created"] = created_now
         except MindVaultError as exc:
+            # 更新 404（实例迁移/笔记被删）→ 自愈：清 uuid 转新建，仅当本次为更新尝试
+            if is_update and "404" in str(exc):
+                row.mv_uuid = None
+                session.add(row)
+                session.commit()
+                logger.info(f"[推送] matchId={match_id} 更新 404 自愈转新建")
+                return await push_report(analysis, content_md, prompt_version=prompt_version,
+                                         title=title, review_json=review_json, degraded=degraded)
             row.pushed = False
             out["reason"] = str(exc)
             logger.warning(f"[推送] matchId={match_id} 失败（本地已保存）：{exc}")
         session.add(row)
         session.commit()
         return out
+
+
+class _NoteMissing(Exception):
+    """内部信号：无既有笔记，转新建分支。"""
 
 
 def gc_raw_demo(dem_path: Path) -> None:
