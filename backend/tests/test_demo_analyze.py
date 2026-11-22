@@ -30,6 +30,23 @@ def fake_pipeline(client, monkeypatch, tmp_path):
 
     async def fake_push(analysis_arg, md, **kw):
         pushed["called"] = True
+        # 与真实 push_report 对齐：本地 Report 行始终落库
+        from app.database import session_factory
+        from app.models import Report
+        from app.services.report import compute_source_hash
+
+        with session_factory() as s:
+            s.add(Report(
+                match_id=analysis_arg.match_id,
+                prompt_version=PromptVersion,
+                source_hash=compute_source_hash(analysis_arg.match_id, PromptVersion),
+                title=f"复盘 · {analysis_arg.match_id}",
+                content_md=md,
+                degraded=kw.get("degraded", False),
+                pushed=True,
+                mv_uuid="u-1",
+            ))
+            s.commit()
         return {"created": True, "uuid": "u-1", "reason": None, "match_id": analysis_arg.match_id}
 
     monkeypatch.setattr(da, "push_report", fake_push)
