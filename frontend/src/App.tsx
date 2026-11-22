@@ -399,6 +399,114 @@ function SettingsPage() {
   );
 }
 
+// ---------- B站学习 ----------
+function LearnPage() {
+  const [kw, setKw] = useState("");
+  const qc = useQueryClient();
+  const videos = useQuery({
+    queryKey: ["bili-videos"],
+    queryFn: () => apiGet<Record<string, unknown>[]>("/bili/videos"),
+  });
+  const grenades = useQuery({
+    queryKey: ["grenades"],
+    queryFn: () => apiGet<Record<string, unknown>[]>("/bili/grenades"),
+  });
+  const learn = useMutation({
+    mutationFn: (payload: Record<string, string>) => {
+      const body = payload.bvid ? { bvid: payload.bvid } : { keyword: payload.keyword };
+      return apiPost<{ id: number }>("/tasks", { type: "bili_learn", payload: body }).then((t) =>
+        apiPost<{ status: string; error: string | null }>(`/tasks/${t.id}/run`),
+      );
+    },
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["bili-videos"] });
+      qc.invalidateQueries({ queryKey: ["grenades"] });
+      if (res.status === "success") message.success("学习完成，总结已推送 MindVault");
+      else message.error(`失败：${res.error ?? res.status}`);
+    },
+  });
+
+  return (
+    <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+      <Card title="学道具（B站字幕 → AI 总结 + 道具卡）" style={{ maxWidth: 720 }}>
+        <Space>
+          <Input
+            placeholder="关键词（如：CS2 A大 烟雾）或直接 BV 号"
+            value={kw}
+            style={{ width: 320 }}
+            onChange={(e) => setKw(e.target.value)}
+          />
+          <Button
+            type="primary"
+            loading={learn.isPending}
+            onClick={() =>
+              learn.mutate({ [kw.toUpperCase().startsWith("BV") ? "bvid" : "keyword"]: kw })
+            }
+          >
+            学习
+          </Button>
+        </Space>
+        <div style={{ color: "#999", fontSize: 12, marginTop: 8 }}>
+          每次最多 5 条视频，字幕优先；AI 总结借 MindVault 公网实例（需设置页配好 MindVault 密码）
+        </div>
+      </Card>
+
+      <Card title="道具库" size="small">
+        <Table
+          rowKey={(r: Record<string, unknown>) => String(r["id"])}
+          loading={grenades.isLoading}
+          dataSource={grenades.data ?? []}
+          columns={[
+            { title: "地图", dataIndex: "map_name", key: "map_name", width: 100 },
+            { title: "点位", dataIndex: "point", key: "point", width: 90 },
+            { title: "道具", dataIndex: "grenade_type", key: "grenade_type", width: 90 },
+            { title: "时机", dataIndex: "timing", key: "timing", ellipsis: true },
+            {
+              title: "视频",
+              dataIndex: "bvid",
+              key: "bvid",
+              width: 130,
+              render: (bv: string, r: Record<string, unknown>) =>
+                bv ? (
+                  <a href={`https://www.bilibili.com/video/${bv}${r["video_ts"] ? `?t=${String(r["video_ts"]).replace(/[^0-9]/g, "")}` : ""}`} target="_blank" rel="noreferrer">
+                    跳转{r["video_ts"] ? ` @${r["video_ts"]}` : ""}
+                  </a>
+                ) : (
+                  "-"
+                ),
+            },
+          ]}
+          pagination={{ pageSize: 10 }}
+          size="small"
+        />
+      </Card>
+
+      <Card title="已学视频" size="small">
+        <Table
+          rowKey="bvid"
+          loading={videos.isLoading}
+          dataSource={videos.data ?? []}
+          columns={[
+            { title: "标题", dataIndex: "title", key: "title", ellipsis: true },
+            { title: "UP主", dataIndex: "owner", key: "owner", width: 120 },
+            {
+              title: "字幕",
+              dataIndex: "subtitle_status",
+              key: "subtitle_status",
+              width: 110,
+              render: (s: string) => (
+                <Tag color={s === "subtitle" ? "green" : s === "no_subtitle" ? "orange" : "default"}>{s}</Tag>
+              ),
+            },
+          ]}
+          pagination={{ pageSize: 8 }}
+          size="small"
+        />
+      </Card>
+    </Space>
+  );
+}
+
 // ---------- App ----------
 export default function App() {
   return (
@@ -413,6 +521,7 @@ export default function App() {
           items={[
             { key: "overview", label: "总览", children: <OverviewPage /> },
             { key: "matches", label: "对局", children: <MatchesPage /> },
+            { key: "learn", label: "学道具", children: <LearnPage /> },
             { key: "tasks", label: "任务", children: <TasksPage /> },
             { key: "settings", label: "设置", children: <SettingsPage /> },
           ]}
