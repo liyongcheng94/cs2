@@ -8,9 +8,9 @@
 
 ```
 cs2/
-├── backend/          # FastAPI + SQLModel + SQLite（端口 8100）
+├── backend/          # FastAPI + SQLModel + SQLite（端口 8101）
 │   └── app/{api,services,models.py,config.py,database.py,main.py}
-├── frontend/         # React + antd + Vite（端口 5174，/api → 8100）
+├── frontend/         # React + antd + Vite（端口 5174，/api → 8101）
 ├── data/             # 运行时数据（.gitignore）
 └── verify.bat        # 一键验收
 ```
@@ -21,7 +21,7 @@ cs2/
 # 后端
 py -V:Astral/CPython3.12.12 -m venv backend/.venv
 backend/.venv/Scripts/pip install -r backend/requirements.txt
-backend/.venv/Scripts/python.exe -m uvicorn app.main:app --port 8100   # cwd=backend
+backend/.venv/Scripts/python.exe -m uvicorn app.main:app --port 8101   # cwd=backend
 
 # 前端
 cd frontend && npm install && npm run dev   # http://localhost:5174

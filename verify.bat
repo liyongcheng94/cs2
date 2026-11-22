@@ -10,14 +10,14 @@ cd /d %~dp0frontend
 call npx tsc --noEmit
 if errorlevel 1 goto :fail
 
-REM Mock 全链路：仅当 CS2HQ 后端已在 8100 运行时执行（预期输出 "pushed":true）
-curl -s -m 3 http://127.0.0.1:8100/api/health | findstr /C:"ok" >nul
+REM Mock 全链路：仅当 CS2HQ 后端已在 8101 运行时执行（预期输出 "pushed":true）
+curl -s -m 3 http://127.0.0.1:8101/api/health | findstr /C:"ok" >nul
 if %errorlevel%==0 (
   echo --- Mock 全链路检查 ---
-  curl -s -X POST http://127.0.0.1:8100/api/test/mock-flow
+  curl -s -X POST http://127.0.0.1:8101/api/test/mock-flow
   echo.
 ) else (
-  echo [跳过] CS2HQ 后端未启动（8100），Mock 链路检查略过
+  echo [跳过] CS2HQ 后端未启动（8101），Mock 链路检查略过
 )
 
 echo VERIFY DONE

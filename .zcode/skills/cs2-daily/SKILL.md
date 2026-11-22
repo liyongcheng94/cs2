@@ -5,19 +5,19 @@ description: 拉取今日 CS2 战绩并生成日报（同步对局 → demo 分�
 
 # /cs2-daily
 
-按顺序执行（CS2HQ 后端需在 8100 运行；MindVault 需在 8001/8300 运行）：
+按顺序执行（CS2HQ 后端需在 8101 运行；MindVault 需在 8001/8300 运行）：
 
 1. **同步对局**：
    ```bash
-   TID=$(curl -s -X POST http://127.0.0.1:8100/api/tasks -H "Content-Type: application/json" -d '{"type":"wanmei_sync"}' | python -c "import json,sys;print(json.load(sys.stdin)['id'])")
-   curl -s -X POST http://127.0.0.1:8100/api/tasks/$TID/run
+   TID=$(curl -s -X POST http://127.0.0.1:8101/api/tasks -H "Content-Type: application/json" -d '{"type":"wanmei_sync"}' | python -c "import json,sys;print(json.load(sys.stdin)['id'])")
+   curl -s -X POST http://127.0.0.1:8101/api/tasks/$TID/run
    ```
    若状态为 NEED_AUTH：提示用户去面板设置页重新短信登录，终止。
 
 2. **分析最近对局**：`GET /api/matches` 取最近 3 场 `demo_status` 为 `none` 或 `pending_demo` 的对局，逐个：
    ```bash
-   curl -s -X POST http://127.0.0.1:8100/api/tasks -H "Content-Type: application/json" -d '{"type":"demo_analyze","payload":{"match_id":"<matchId>"}}'
-   curl -s -X POST http://127.0.0.1:8100/api/tasks/<id>/run
+   curl -s -X POST http://127.0.0.1:8101/api/tasks -H "Content-Type: application/json" -d '{"type":"demo_analyze","payload":{"match_id":"<matchId>"}}'
+   curl -s -X POST http://127.0.0.1:8101/api/tasks/<id>/run
    ```
    failed 且 error 含"客户端"：告知用户"在完美客户端对局回放里点开该场 demo 即自动下载，之后重跑 /cs2-daily"。
 

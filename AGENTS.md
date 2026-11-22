@@ -8,8 +8,8 @@
 |------|------|
 | 定位 | 专属 CS2 提升平台：完美平台战绩 + demo 四维解析 + B站学习 + 完美时刻，全自动推送 MindVault |
 | 架构 | `backend/`（FastAPI + SQLModel + SQLite，入口 `app/main.py`，DB 在 `data/cs2hq.db`）+ `frontend/`（React + antd + Vite） |
-| 后端端口 | `127.0.0.1:8100`（dev，uvicorn） |
-| 前端端口 | `5174`（vite dev，/api 代理到 8100） |
+| 后端端口 | `127.0.0.1:8101`（dev，uvicorn） |
+| 前端端口 | `5174`（vite dev，/api 代理到 8101） |
 | 计划文档 | `ARCHITECTURE.md`（v5 终版，每阶段完成打勾附验收证据） |
 | Python | 3.12（uv 管理的 CPython 3.12.12；`py -V:Astral/CPython3.12.12 -m venv .venv`） |
 
@@ -24,7 +24,7 @@ cd frontend && npx tsc --noEmit && npm run build
 python verify.bat
 ```
 
-**Mock 全链路（每日收工前必跑）**：MindVault 启动后（dev: 8001）`curl -X POST http://127.0.0.1:8100/api/test/mock-flow` 应返回 `pushed: true` 且 MindVault `curl "http://127.0.0.1:8001/api/search?q=CS2HQ"` 能命中。
+**Mock 全链路（每日收工前必跑）**：MindVault 启动后（dev: 8001）`curl -X POST http://127.0.0.1:8101/api/test/mock-flow` 应返回 `pushed: true` 且 MindVault `curl "http://127.0.0.1:8001/api/search?q=CS2HQ"` 能命中。
 
 ## 1. 场景先行（BDD）
 
