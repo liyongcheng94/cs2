@@ -28,6 +28,7 @@ from ..schemas.analysis import (
     DuelDim,
     EconomyDim,
     FourDimAnalysis,
+    GrenadeUsage,
     SCHEMA_VERSION,
     ThrowEvent,
     UtilityDim,
@@ -44,6 +45,16 @@ WEAPON_CLASSES = {
     "mac10": "smg", "mp9": "smg", "mp7": "smg", "ump45": "smg", "p90": "smg", "bizon": "smg",
 }
 AWP_LIKE = {"awp", "ssg08", "scar20"}
+
+# item_events purchase 的 item 名 → grenades.type 投掷类型名（实测映射，incendiary 合火）
+PURCHASE_ITEM_TO_GRENADE = {
+    "smokegrenade": "smoke",
+    "flashbang": "flashbang",
+    "hegrenade": "he",
+    "molotov": "molotov",
+    "incendiary": "molotov",
+    "decoy": "decoy",
+}
 
 
 def weapon_class(weapon: str | None) -> str:
@@ -219,12 +230,41 @@ def analyze_utility(demo, grenades, steam_id: int) -> UtilityDim:
         round(max(0, flash_thrown - flash_effective) / flash_thrown, 3)
         if flash_thrown else None
     )
+
+    # 分道具购买 vs 使用（1.1）：purchase 次数 × 实际投掷数
+    thrown_by_type: dict[str, int] = {}
+    for t in throws:
+        gtype = t.grenade_type or "unknown"
+        thrown_by_type[gtype] = thrown_by_type.get(gtype, 0) + 1
+    bought_by_type: dict[str, int] = {}
+    item_events = getattr(demo, "item_events", None)
+    if item_events is not None and item_events.height:
+        buys = item_events.filter(
+            (col("action") == "purchase") & (col("steamid") == steam_id)
+        ).to_dicts()
+        for r in buys:
+            gtype = PURCHASE_ITEM_TO_GRENADE.get((r.get("item") or "").lower())
+            if gtype:
+                bought_by_type[gtype] = bought_by_type.get(gtype, 0) + 1
+    usage = []
+    for gtype in sorted(set(bought_by_type) | set(thrown_by_type)):
+        bought = bought_by_type.get(gtype, 0)
+        thrown = thrown_by_type.get(gtype, 0)
+        if bought > 0:
+            w = round(max(0, bought - thrown) / bought, 3)
+        elif thrown > 0:  # 捡漏（别人掉的/死后捡的）：不算浪费
+            w = 0.0
+        else:
+            w = None
+        usage.append(GrenadeUsage(grenade_type=gtype, bought=bought, thrown=thrown, waste_rate=w))
+
     return UtilityDim(
         throws=throws,
         blind_median_s=round(blind_median, 2) if blind_median is not None else None,
         waste_rate=waste_rate,
         enemy_blind_s=round(enemy_blind_s, 2),
         team_blind_s=round(team_blind_s, 2),
+        usage=usage,
     )
 
 

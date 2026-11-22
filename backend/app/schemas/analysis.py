@@ -68,12 +68,22 @@ class ThrowEvent(BaseModel):
     blind_seconds: float | None = None
 
 
+class GrenadeUsage(BaseModel):
+    """分道具购买 vs 使用（1.1）：买了没扔 = 经济浪费。"""
+
+    grenade_type: str
+    bought: int = 0  # item_events purchase 计数（按类型映射）
+    thrown: int = 0  # grenades 实际投掷数（entity_id 去重）
+    waste_rate: float | None = None  # bought>0: max(0, bought-thrown)/bought；捡漏（bought=0 且 thrown>0）记 0.0
+
+
 class UtilityDim(BaseModel):
     throws: list[ThrowEvent] = Field(default_factory=list)
     blind_median_s: float | None = None  # 致盲敌方时长中位数（抗离群值；1.1 口径仅敌方）
     waste_rate: float | None = None  # 闪光浪费率：1 - 有效闪（敌方致盲>0.5s 数）/ 闪光投掷数
     enemy_blind_s: float | None = None  # 1.1：致盲敌方累计秒数（>0.1s 计入，自闪排除）
     team_blind_s: float | None = None  # 1.1：致盲队友累计秒数（>0.1s 计入，自闪排除）
+    usage: list[GrenadeUsage] = Field(default_factory=list)  # 1.1：分道具购买 vs 使用
 
 
 class AnalysisMeta(BaseModel):
