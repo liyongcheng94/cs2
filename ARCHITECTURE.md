@@ -63,6 +63,14 @@
 - 待办（晨间）：ECharts 对枪热力图/死亡散点（analysis JSON 已就绪）；周报周日推送；cf-tunnel 公网开启（URL 随机，晨间启动即可）；视频总结/道具库前端页面；完整版 /cs2-learn /cs2-moments skills。
 - 已知待修：平局场次胜负判定（等下批真实数据观察 winTeam 口径）。
 
+## 二期（2026-11-23 全部落地）
+
+- ✅ 平局口径：实测 winTeam=-1 → API 派生 draw 字段，UI 显示"平"（11 场历史平局全部正确标注）
+- ✅ 死亡散点雷达底图：awpy-data 官方雷达 PNG×7（1024²）+ 权威坐标映射（pos_x/pos_y/scale），frontend/public/radar/；matches API 派生 map_en（中文→ID 映射表）；散点带击杀方向连线
+- ✅ 对话流式：DeepSeek stream:true → SSE `/api/chat/stream`（delta/done 事件）→ 前端逐字渲染；mindvault 桥自动回退单段；实测逐字推送且内容基于画像口径
+- ✅ 周报 AI 周评：聚合数据 → AI 段落（失败跳过不降级）
+- ⏸ 时刻端点抓包：需用户抓包配合，挂起
+
 ## 禁区与回滚
 
 - **禁区**：不做客户端注入；不批量爬 B站、不公开端点文档；凭证加密不进 git；不改 MindVault 除 capture/videos 外代码；完美平台限速 ≥2s、401/403 必熔断。
