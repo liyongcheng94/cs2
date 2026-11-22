@@ -5,7 +5,7 @@ import json
 import httpx
 import pytest
 
-from app.services.bili import BiliRiskError, sign_wbi
+from app.services.bili import BiliError, BiliRiskError, sign_wbi
 
 
 def test_sign_wbi_deterministic():
@@ -97,6 +97,109 @@ async def test_search_videos_risk_control_raises(monkeypatch):
 
     with pytest.raises(BiliRiskError):
         await b.search_videos("任意词")
+
+
+class FakeRedirectClient:
+    """resolve_bvid 专用假客户端：记录请求 URL，返回预置 302 Location。"""
+
+    last_url: str | None = None
+
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        return False
+
+    async def get(self, url):
+        FakeRedirectClient.last_url = url
+        return self.resp
+
+    resp = httpx.Response(
+        302,
+        headers={"location": "https://www.bilibili.com/video/BV1GJ411x7h7/?p=1"},
+    )
+
+
+@pytest.mark.anyio
+async def test_resolve_bvid_bare_bv(monkeypatch):
+    """
+    Given 裸 BV 号（用户手抄输入）
+    When  resolve_bvid
+    Then  原样返回，不发任何网络请求
+    """
+    import app.services.bili as b
+
+    def boom(*a, **kw):  # 若发起网络请求则测试失败
+        raise AssertionError("裸 BV 不应发起网络请求")
+
+    monkeypatch.setattr(b.httpx, "AsyncClient", boom)
+    assert await b.resolve_bvid("BV1GJ411x7h7") == "BV1GJ411x7h7"
+
+
+@pytest.mark.anyio
+async def test_resolve_bvid_from_full_url(monkeypatch):
+    """
+    Given 完整视频链接（URL 内含 BV）
+    When  resolve_bvid
+    Then  正则直接提取 BV，不发网络请求
+    """
+    import app.services.bili as b
+
+    def boom(*a, **kw):
+        raise AssertionError("含 BV 的链接不应发起网络请求")
+
+    monkeypatch.setattr(b.httpx, "AsyncClient", boom)
+    url = "https://www.bilibili.com/video/BV1GJ411x7h7/?spm_id_from=333.788&p=2"
+    assert await b.resolve_bvid(url) == "BV1GJ411x7h7"
+
+
+@pytest.mark.anyio
+async def test_resolve_bvid_short_link_follows_redirect(monkeypatch):
+    """
+    Given b23.tv 短链（无 scheme）且 302 Location 落到含 BV 的页面
+    When  resolve_bvid
+    Then  补 https:// 前缀发请求，从 Location 提取 BV
+    """
+    import app.services.bili as b
+
+    monkeypatch.setattr(b.httpx, "AsyncClient", FakeRedirectClient)
+    out = await b.resolve_bvid("b23.tv/abc123")
+    assert out == "BV1GJ411x7h7"
+    assert FakeRedirectClient.last_url == "https://b23.tv/abc123"
+
+
+@pytest.mark.anyio
+async def test_resolve_bvid_short_link_without_bv_raises(monkeypatch):
+    """
+    Given 短链 302 到不含 BV 的 Location
+    When  resolve_bvid
+    Then  抛 BiliError（提示短链解析失败）
+    """
+    import app.services.bili as b
+
+    class NoBVClient(FakeRedirectClient):
+        resp = httpx.Response(302, headers={"location": "https://www.bilibili.com/blackboard/activity"})
+
+    monkeypatch.setattr(b.httpx, "AsyncClient", NoBVClient)
+    with pytest.raises(BiliError, match="短链解析失败"):
+        await b.resolve_bvid("b23.tv/xyz")
+
+
+@pytest.mark.anyio
+async def test_resolve_bvid_garbage_input_raises():
+    """
+    Given 无 BV 且非 B站链接的输入（含空串）
+    When  resolve_bvid
+    Then  抛 BiliError（不误发请求）
+    """
+    from app.services.bili import resolve_bvid
+
+    for bad in ("hello world", "", "  ", "av170001"):
+        with pytest.raises(BiliError):
+            await resolve_bvid(bad)
 
 
 def test_fetch_subtitle_real_sessdata(client):
