@@ -21,7 +21,9 @@ import {
   Typography,
 } from "antd";
 import { apiGet, apiPost, apiPut } from "./api/client";
+import { DeathScatter } from "./components/DeathScatter";
 import { DuelHeatmap } from "./components/DuelHeatmap";
+import { SeasonTrends } from "./components/SeasonTrends";
 import { WanmeiLogin } from "./components/WanmeiLogin";
 import type { MatchDetail, MatchSummary, MockFlowResult, Profile, TaskItem } from "./types";
 
@@ -35,6 +37,11 @@ function OverviewPage() {
   const profileQuery = useQuery({
     queryKey: ["profile"],
     queryFn: () => apiGet<Profile>("/profile"),
+  });
+  const season = useQuery({
+    queryKey: ["season-stats"],
+    queryFn: () => apiGet<{ season_id: string; data: Record<string, unknown>; updated_at: string }>("/matches/stats/season"),
+    retry: false,
   });
   const mockFlow = useMutation({
     mutationFn: () => apiPost<MockFlowResult>("/test/mock-flow"),
@@ -112,6 +119,16 @@ function OverviewPage() {
           </Descriptions>
         ) : null}
       </Modal>
+
+      {season.data ? (
+        <SeasonTrends data={season.data.data as Record<string, any>} />
+      ) : (
+        <Card size="small">
+          <span style={{ color: "#999", fontSize: 12 }}>
+            赛季统计尚未同步——点上方任意一次「同步」后自动生成趋势图
+          </span>
+        </Card>
+      )}
     </Space>
   );
 }
@@ -226,15 +243,18 @@ function MatchesPage() {
             {detail.data.analysis ? (
               <>
                 <DuelHeatmap analysis={detail.data.analysis} />
-                {detail.data.analysis.deaths?.disadvantaged_rate != null ? (
-                  <Statistic title="劣势枪位死亡率（近似口径）" value={(detail.data.analysis.deaths.disadvantaged_rate * 100).toFixed(0) + "%"} />
-                ) : null}
-                {detail.data.analysis.utility?.blind_median_s != null ? (
-                  <Statistic title="致盲时长中位数" value={detail.data.analysis.utility.blind_median_s + "s"} />
-                ) : null}
-                {detail.data.analysis.economy?.first_kill_conversion != null ? (
-                  <Statistic title="首杀转化率" value={(detail.data.analysis.economy.first_kill_conversion * 100).toFixed(0) + "%"} />
-                ) : null}
+                <DeathScatter analysis={detail.data.analysis} />
+                <Row gutter={16}>
+                  {detail.data.analysis.deaths?.disadvantaged_rate != null ? (
+                    <Col span={8}><Statistic title="劣势枪位死亡率" value={(detail.data.analysis.deaths.disadvantaged_rate * 100).toFixed(0) + "%"} /></Col>
+                  ) : null}
+                  {detail.data.analysis.utility?.blind_median_s != null ? (
+                    <Col span={8}><Statistic title="致盲时长中位数" value={detail.data.analysis.utility.blind_median_s + "s"} /></Col>
+                  ) : null}
+                  {detail.data.analysis.economy?.first_kill_conversion != null ? (
+                    <Col span={8}><Statistic title="首杀转化率" value={(detail.data.analysis.economy.first_kill_conversion * 100).toFixed(0) + "%"} /></Col>
+                  ) : null}
+                </Row>
               </>
             ) : (
               <Alert type="info" message="该场尚未做 demo 分析：在对局列表点「分析demo」生成四维数据" />
@@ -412,8 +432,12 @@ function LearnPage() {
     queryFn: () => apiGet<Record<string, unknown>[]>("/bili/grenades"),
   });
   const learn = useMutation({
-    mutationFn: (payload: Record<string, string>) => {
-      const body = payload.bvid ? { bvid: payload.bvid } : { keyword: payload.keyword };
+    mutationFn: (payload: { bvid?: string; up_mid?: string; keyword?: string }) => {
+      const body = payload.bvid
+        ? { bvid: payload.bvid }
+        : payload.up_mid
+          ? { up_mid: Number(payload.up_mid) }
+          : { keyword: payload.keyword };
       return apiPost<{ id: number }>("/tasks", { type: "bili_learn", payload: body }).then((t) =>
         apiPost<{ status: string; error: string | null }>(`/tasks/${t.id}/run`),
       );
@@ -431,7 +455,7 @@ function LearnPage() {
       <Card title="学道具（B站字幕 → AI 总结 + 道具卡）" style={{ maxWidth: 720 }}>
         <Space>
           <Input
-            placeholder="关键词（如：CS2 A大 烟雾）或直接 BV 号"
+            placeholder="关键词 / BV 号 / UP主 mid 号"
             value={kw}
             style={{ width: 320 }}
             onChange={(e) => setKw(e.target.value)}
@@ -439,15 +463,20 @@ function LearnPage() {
           <Button
             type="primary"
             loading={learn.isPending}
-            onClick={() =>
-              learn.mutate({ [kw.toUpperCase().startsWith("BV") ? "bvid" : "keyword"]: kw })
-            }
+            onClick={() => {
+              const body = kw.toUpperCase().startsWith("BV")
+                ? { bvid: kw }
+                : /^\d+$/.test(kw)
+                  ? { up_mid: kw }
+                  : { keyword: kw };
+              learn.mutate(body);
+            }}
           >
             学习
           </Button>
         </Space>
         <div style={{ color: "#999", fontSize: 12, marginTop: 8 }}>
-          每次最多 5 条视频，字幕优先；AI 总结借 MindVault 公网实例（需设置页配好 MindVault 密码）
+          纯数字=UP主（学最新 3 投稿），BV=单视频，其余=关键词检索；每次最多 5 条；AI 总结借 MindVault 公网实例
         </div>
       </Card>
 

@@ -35,6 +35,10 @@ class DeathEvent(BaseModel):
     first_duel: bool | None = None  # 是否首杀/首死
     teammate_support: bool | None = None  # 死亡时附近有无队友
     disadvantaged_position: bool | None = None  # 是否劣势枪位（无掩体/被交叉火力覆盖）
+    victim_x: float | None = None  # 死亡位置（游戏坐标，散点图用）
+    victim_y: float | None = None
+    killer_x: float | None = None  # 击杀者位置
+    killer_y: float | None = None
 
 
 class DeathDim(BaseModel):

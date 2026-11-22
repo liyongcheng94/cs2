@@ -137,3 +137,20 @@ async def fetch_subtitle(bvid: str, sessdata: str) -> str | None:
     text = "\n".join(x for x in lines if x)
     logger.info(f"[B站字幕] bvid={bvid} lan={pick.get('lan')} 行数={len(lines)}")
     return text or None
+
+
+async def search_user_videos(mid: int, sessdata: str, limit: int = 5) -> list[dict[str, Any]]:
+    """UP 主最新投稿（bilibili-api user.User.get_videos，按发布时间倒序取 limit 条）。"""
+    from bilibili_api import Credential
+    from bilibili_api import user as bili_user_mod
+
+    cred = Credential(sessdata=sessdata)
+    u = bili_user_mod.User(uid=mid, credential=cred)
+    res = await u.get_videos(pn=1, ps=max(limit, 5))
+    rows = (res.get("list") or {}).get("vlist") or []
+    out = [
+        {"bvid": r.get("bvid"), "title": r.get("title"), "author": r.get("author"), "pubdate": r.get("created")}
+        for r in rows[:limit]
+    ]
+    logger.info(f"[B站UP] mid={mid} 取 {len(out)} 条最新投稿")
+    return out

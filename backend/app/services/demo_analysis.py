@@ -97,6 +97,8 @@ def analyze_deaths(kills, rounds, steam_id: int):
             first_duel=(first_kill_tick.get(rn) == int(r["tick"])),
             teammate_support=not no_support,
             disadvantaged_position=bool(disadvantaged),
+            victim_x=r.get("victim_x"), victim_y=r.get("victim_y"),
+            killer_x=r.get("attacker_x"), killer_y=r.get("attacker_y"),
         ))
     buckets: dict[str, dict] = {}
     for e in events:

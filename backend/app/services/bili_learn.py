@@ -16,7 +16,7 @@ from ..database import session_factory
 from ..models import BiliVideo, GrenadeCard, Task, utcnow
 from . import settings_service
 from .ai_client import AiClient
-from .bili import BiliRiskError, fetch_subtitle, search_videos
+from .bili import BiliRiskError, fetch_subtitle, search_user_videos, search_videos
 from .report_push import REPORT_TOPIC  # noqa: F401  （保持同一推送主题风格）
 
 SUMMARY_TOPIC = "CS2视频总结"
@@ -48,6 +48,7 @@ async def bili_learn_handler(task: Task, session_factory_fn: Callable[[], Sessio
     payload = task.payload or {}
     bvid: str = payload.get("bvid") or ""
     keyword: str = payload.get("keyword") or ""
+    up_mid: int = int(payload.get("up_mid") or 0)
     sess = _credential_sess(session_factory_fn())
     if not sess:
         raise ValueError("未配置 B站 SESSDATA（设置页粘贴）")
@@ -55,11 +56,14 @@ async def bili_learn_handler(task: Task, session_factory_fn: Callable[[], Sessio
     targets: list[dict] = []
     if bvid:
         targets = [{"bvid": bvid}]
+    elif up_mid:
+        targets = await search_user_videos(up_mid, sess, limit=3)  # UP 最新 3 条
+        await asyncio.sleep(1)
     elif keyword:
         targets = (await search_videos(keyword, sess, page=1))[:5]  # 每任务最多 5 条，限速在下方
         await asyncio.sleep(1)
     else:
-        raise ValueError("payload 需 bvid 或 keyword")
+        raise ValueError("payload 需 bvid / up_mid / keyword 之一")
 
     summary_client = _new_ai()
     results = []
