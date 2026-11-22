@@ -117,6 +117,15 @@ def test_analyze_deaths_disadvantaged_approximation():
     assert dim.disadvantaged_rate == 1.0
 
 
+def _item_events_frame(rows):
+    cols = ["tick", "action", "steamid", "item", "cost"]
+    data = {c: [] for c in cols}
+    for r in rows:
+        for c in cols:
+            data[c].append(r.get(c))
+    return pl.DataFrame(data)
+
+
 def _blinds_frame(rows):
     cols = ["attacker_steamid", "victim_steamid", "attacker_side", "victim_side", "duration"]
     data = {c: [] for c in cols}
@@ -223,6 +232,46 @@ def test_analyze_duels_skips_unlocatable_kills():
     ])
     dim = analyze_duels(kills, sid)
     assert [(b.distance, b.weapon) for b in dim.by_weapon_distance] == [("0-5m", "rifle")]
+
+
+def test_analyze_utility_usage_bought_vs_thrown():
+    """
+    Given user 购买 smokegrenade×3 / flashbang×2（item_events purchase），实际投掷 smoke×2 / flash×1 / he×1（捡漏）
+    When  analyze_utility
+    Then  usage 按 purchase item→grenade type 映射：smoke {bought:3, thrown:2, waste_rate:0.333}、
+          flashbang {bought:2, thrown:1, waste_rate:0.5}、he {bought:0, thrown:1, waste_rate:0.0}（捡漏不亏）
+    """
+    sid = 111
+    other = 999
+    demo = SimpleNamespace(
+        item_events=_item_events_frame([
+            {"tick": 10, "action": "purchase", "steamid": sid, "item": "smokegrenade", "cost": 300},
+            {"tick": 11, "action": "purchase", "steamid": sid, "item": "smokegrenade", "cost": 300},
+            {"tick": 12, "action": "purchase", "steamid": sid, "item": "smokegrenade", "cost": 300},
+            {"tick": 13, "action": "purchase", "steamid": sid, "item": "flashbang", "cost": 200},
+            {"tick": 14, "action": "purchase", "steamid": sid, "item": "flashbang", "cost": 200},
+            {"tick": 15, "action": "purchase", "steamid": other, "item": "smokegrenade", "cost": 300},
+            {"tick": 16, "action": "purchase", "steamid": sid, "item": "ak47", "cost": 2700},  # 枪械不入 usage
+        ]),
+        blinds=_blinds_frame([]),
+    )
+    grenades = _grenades_frame([
+        {"entity_id": 1, "thrower_steamid": sid, "type": "smoke", "tick": 100, "x": 0, "y": 0, "z": 0},
+        {"entity_id": 2, "thrower_steamid": sid, "type": "smoke", "tick": 200, "x": 0, "y": 0, "z": 0},
+        {"entity_id": 3, "thrower_steamid": sid, "type": "flashbang", "tick": 300, "x": 0, "y": 0, "z": 0},
+        {"entity_id": 4, "thrower_steamid": sid, "type": "he", "tick": 400, "x": 0, "y": 0, "z": 0},
+        # 他人投掷不计入
+        {"entity_id": 5, "thrower_steamid": other, "type": "smoke", "tick": 500, "x": 0, "y": 0, "z": 0},
+    ])
+    dim = analyze_utility(demo, grenades, sid)
+    usage = {u.grenade_type: u for u in dim.usage}
+    assert usage["smoke"].bought == 3 and usage["smoke"].thrown == 2
+    assert usage["smoke"].waste_rate == 0.333
+    assert usage["flashbang"].bought == 2 and usage["flashbang"].thrown == 1
+    assert usage["flashbang"].waste_rate == 0.5
+    assert usage["he"].bought == 0 and usage["he"].thrown == 1
+    assert usage["he"].waste_rate == 0.0
+    assert "rifle" not in {u.grenade_type for u in dim.usage}
 
 
 def test_schema_version_bumped_to_1_1():
