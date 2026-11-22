@@ -37,6 +37,11 @@ async def chat(user_content: str, session_id: int | None = None, session_factory
             session.commit()
             session.refresh(cs)
             session_id = cs.id
+        else:
+            cs = session.get(ChatSession, session_id)
+            if cs is not None and cs.title == "新对话":
+                cs.title = user_content[:20] or "新对话"  # 首句自动作标题
+                session.add(cs)
         session.add(ChatMessage(session_id=session_id, role="user", content=user_content))
         session.commit()
 
