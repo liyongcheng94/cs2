@@ -12,10 +12,19 @@ export interface MatchSummary {
   demo_status: string;
 }
 
+export interface FourDimAnalysisShape {
+  match_id: string;
+  deaths?: { events?: Record<string, unknown>[]; disadvantaged_rate?: number | null };
+  economy?: { buy_decisions?: Record<string, unknown>[]; first_kill_conversion?: number | null };
+  utility?: { throws?: Record<string, unknown>[]; blind_median_s?: number | null; waste_rate?: number | null };
+  duels?: { by_weapon_distance?: { distance: string; weapon: string; kills?: number; deaths?: number; win_rate?: number | null }[] };
+  meta?: { parser?: string; cost_s?: number | null; peak_mem_mb?: number | null };
+}
+
 export interface MatchDetail {
   match: MatchSummary;
   stat: Record<string, unknown> | null;
-  analysis: Record<string, unknown> | null;
+  analysis: FourDimAnalysisShape | null;
   report: { title: string; pushed: boolean } | null;
 }
 

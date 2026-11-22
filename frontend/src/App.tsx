@@ -21,6 +21,7 @@ import {
   Typography,
 } from "antd";
 import { apiGet, apiPost, apiPut } from "./api/client";
+import { DuelHeatmap } from "./components/DuelHeatmap";
 import { WanmeiLogin } from "./components/WanmeiLogin";
 import type { MatchDetail, MatchSummary, MockFlowResult, Profile, TaskItem } from "./types";
 
@@ -222,9 +223,22 @@ function MatchesPage() {
                 description={detail.data.report.pushed ? "已推送 MindVault" : "未推送"}
               />
             ) : null}
-            <pre style={{ fontSize: 12, whiteSpace: "pre-wrap" }}>
-              {JSON.stringify(detail.data.analysis, null, 2)}
-            </pre>
+            {detail.data.analysis ? (
+              <>
+                <DuelHeatmap analysis={detail.data.analysis} />
+                {detail.data.analysis.deaths?.disadvantaged_rate != null ? (
+                  <Statistic title="劣势枪位死亡率（近似口径）" value={(detail.data.analysis.deaths.disadvantaged_rate * 100).toFixed(0) + "%"} />
+                ) : null}
+                {detail.data.analysis.utility?.blind_median_s != null ? (
+                  <Statistic title="致盲时长中位数" value={detail.data.analysis.utility.blind_median_s + "s"} />
+                ) : null}
+                {detail.data.analysis.economy?.first_kill_conversion != null ? (
+                  <Statistic title="首杀转化率" value={(detail.data.analysis.economy.first_kill_conversion * 100).toFixed(0) + "%"} />
+                ) : null}
+              </>
+            ) : (
+              <Alert type="info" message="该场尚未做 demo 分析：在对局列表点「分析demo」生成四维数据" />
+            )}
           </Space>
         ) : (
           "加载中…"
