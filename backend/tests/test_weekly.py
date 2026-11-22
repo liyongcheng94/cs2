@@ -82,3 +82,36 @@ def test_weekly_report_handler_pushes(client, monkeypatch):
     task = Task(id=1, type="weekly_report")
     out = asyncio.run(weekly_report_handler(task, session_factory))
     assert out["created"] is True and out["uuid"] == "weekly-u1"
+
+
+def test_weekly_ai_comment_actually_reaches_push(client, monkeypatch):
+    """
+    Given AI 桩返回可识别标记文本
+    When  执行 weekly_report
+    Then  该标记文本出现在推送的 Markdown 里（防：NameError 被 except 吞掉后 AI 周评静默失效——
+          旧断言 "AI 周评" in content 被静态占位文案空转通过，必须断言 AI 真实输出）
+    """
+    import app.services.weekly as wk
+    from app.services.mindvault_client import MindVaultClient
+
+    MARK = "周评标记：本周复盘覆盖 3 场，评分趋势健康。"
+
+    class StubMV(MindVaultClient):
+        def __init__(self):
+            super().__init__(base_url="http://stub")
+
+        async def push_note(self, title, content, topic_name=None, topic_id=None):
+            assert MARK in content, "AI 周评输出未到达推送内容（json 序列化路径失效）"
+            return {"uuid": "weekly-u2"}
+
+    class StubAI:
+        provider = "deepseek"
+
+        async def chat(self, system, user):
+            return MARK
+
+    monkeypatch.setattr(wk, "_new_mv", lambda: StubMV())
+    monkeypatch.setattr(wk, "build_ai_client", lambda session: StubAI())
+    task = Task(id=2, type="weekly_report")
+    out = asyncio.run(weekly_report_handler(task, session_factory))
+    assert out["created"] is True and out["uuid"] == "weekly-u2"
