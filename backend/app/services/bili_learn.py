@@ -105,11 +105,12 @@ async def bili_learn_handler(task: Task, session_factory_fn: Callable[[], Sessio
 
 
 def _new_ai() -> AiClient | None:
+    """按 provider 构建客户端：mindvault 桥无需 key；其余 provider 缺 key 时返回 None（降级）。"""
     with session_factory() as session:
-        key = settings_service.get_value(session, "ai.api_key") or ""
-        if not key:
-            return None
         provider = settings_service.get_value(session, "ai.provider") or "deepseek"
+        key = settings_service.get_value(session, "ai.api_key") or ""
+        if provider != "mindvault" and not key:
+            return None
         from .ai_client import build_ai_client
 
         return build_ai_client(session)

@@ -51,7 +51,7 @@
 - 2026-11-22 夜间完成：`services/bili.py`（自研 WBI 签名检索，MindVault 同款算法；字幕走 bilibili-api 17.4.2 `get_subtitle(cid=pages[0])`，SESSDATA 登录态）；`services/bili_learn.py`（任务 bili_learn：BV/关键词 → 字幕 → AI 总结+道具卡 → 推送 CS2视频总结 主题）。
 - **真实冒烟**：检索"CS2 烟雾弹 教学"命中 20 条；BV1Ub421v7ug（道具手教学）ai-zh 字幕 7219 字；端到端：字幕→降级原文→推送 MindVault（uuid 584cf046，可搜）；无字幕视频正确标 no_subtitle。
 - 风控软着陆就位（BiliRiskError → -412/-352 → 任务层暂停 ≥1h）。
-- 待明早（AI Key）：真实总结 + ≥1 张道具卡入库 CS2道具库；前端视频总结/道具库页面。
+- ✅ 2026-11-23 闸门完成：AI 桥（provider=mindvault 借公网 DeepSeek）真 AI 总结 + **7 张道具卡**入库 CS2道具库（Mirage B区/B2楼闪光、B小道/警察/VIP烟）；公网搜索 "CS2" 命中 12 条。修复：编排器/bili_learn 此前硬编码 ai=None 或按 api_key 判空（MindVault 桥无需 key）导致 AI 从未被调用。
 
 ### [~] 阶段 4：完美时刻（管线就绪，真实数据待用户导出）
 - 2026-11-22 夜间完成：getPersonalMoments 端点实测 404（未公开，抓包方案留待后续不阻塞）——改用**与 demo 同构的客户端协作方案**：用户导出时刻 mp4 到 moments.dir（设置页配置）→ `services/moments.py` 扫描 → ≤20MB 直推 / 超限 ffmpeg（imageio-ffmpeg 静态二进制，-preset veryfast 720p/CRF28）→ MindVault `/api/capture/videos` → Clip 行幂等。
