@@ -11,6 +11,11 @@ const queryClient = new QueryClient({
   },
 });
 
+// 全场数据表中高亮用户自己的行
+const style = document.createElement("style");
+style.textContent = `.my-row td { background: rgba(39, 174, 96, 0.15); }`;
+document.head.appendChild(style);
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>

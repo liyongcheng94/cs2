@@ -166,6 +166,11 @@ function MatchesPage() {
     queryFn: () => apiGet<MatchDetail>(`/matches/${detailId}`),
     enabled: detailId !== null,
   });
+  const [v1Data, setV1Data] = useState<Record<string, unknown> | null>(null);
+  const loadV1 = useMutation({
+    mutationFn: () => apiGet<Record<string, unknown>>(`/matches/${detailId}/detail-v1`),
+    onSuccess: (d) => setV1Data(d),
+  });
 
   const columns = [
     { title: "地图", dataIndex: "map_name", key: "map_name" },
@@ -256,6 +261,33 @@ function MatchesPage() {
                     <Col span={8}><Statistic title="首杀转化率" value={(detail.data.analysis.economy.first_kill_conversion * 100).toFixed(0) + "%"} /></Col>
                   ) : null}
                 </Row>
+                <Button size="small" loading={loadV1.isPending} onClick={() => loadV1.mutate()}>
+                  载入全场详细数据（10 人）
+                </Button>
+                {v1Data ? (
+                  <Table
+                    rowKey={(r: Record<string, unknown>) => String(r["playerId"])}
+                    size="small"
+                    pagination={false}
+                    dataSource={(v1Data["players"] as Record<string, unknown>[]) ?? []}
+                    rowClassName={(r: Record<string, unknown>) =>
+                      String(r["playerId"]) === String(detail.data.match.player_id ?? "") ? "my-row" : ""
+                    }
+                    columns={[
+                      { title: "队伍", dataIndex: "team", width: 60 },
+                      { title: "昵称", dataIndex: "nickName", ellipsis: true },
+                      { title: "K/D", key: "kd", render: (_: unknown, r: Record<string, unknown>) => `${r["kill"]}/${r["death"]}` },
+                      { title: "助攻", dataIndex: "assist", width: 55 },
+                      { title: "KAST", dataIndex: "kast", width: 65 },
+                      { title: "ADR", dataIndex: "adpr", width: 60 },
+                      { title: "Rating", dataIndex: "rating", width: 65 },
+                      { title: "首杀/首死", key: "entry", render: (_: unknown, r: Record<string, unknown>) => `${r["entryKill"]}/${r["entryDeath"]}` },
+                      { title: "补枪", dataIndex: "tradeFragCount", width: 55 },
+                      { title: "道具", dataIndex: "throwsCnt", width: 55 },
+                      { title: "WE", dataIndex: "we", width: 50 },
+                    ]}
+                  />
+                ) : null}
               </>
             ) : (
               <Alert type="info" message="该场尚未做 demo 分析：在对局列表点「分析demo」生成四维数据" />

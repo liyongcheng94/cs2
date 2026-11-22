@@ -76,6 +76,7 @@ def get_match(match_id: int, session: SessionDep) -> dict:
             "mode": match.mode,
             "played_at": match.played_at.isoformat() if match.played_at else None,
             "demo_status": match.demo_status,
+            "player_id": (match.raw or {}).get("playerId"),
         },
         "stat": stat.model_dump(exclude={"raw"}) if stat else None,
         "analysis": analysis.payload if analysis else None,
