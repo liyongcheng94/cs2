@@ -9,14 +9,11 @@ from sqlmodel import Session, select
 
 from ..database import session_factory
 from ..models import Task, utcnow
+from .wanmei import WanmeiAuthError  # 单一定义源：完美平台 401/403 熔断异常（re-export）
 
 Handler = Callable[[Task, Callable[[], Session]], Awaitable[dict]]
 
 HANDLERS: dict[str, Handler] = {}
-
-
-class WanmeiAuthError(Exception):
-    """完美平台 token 失效（401/403）——必须熔断，严禁后台重试。"""
 
 
 def create_task(
