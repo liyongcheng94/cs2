@@ -1,6 +1,7 @@
 """周报：近 7 天对局聚合（胜率/平均 rating/demo 分析数/道具卡数）→ 推送 MindVault「CS2周报」。"""
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta
 from typing import Callable
 
