@@ -261,6 +261,33 @@ function MatchesPage() {
                     <Col span={8}><Statistic title="首杀转化率" value={(detail.data.analysis.economy.first_kill_conversion * 100).toFixed(0) + "%"} /></Col>
                   ) : null}
                 </Row>
+                {detail.data.analysis.utility?.enemy_blind_s != null ? (
+                  <Row gutter={16}>
+                    <Col span={8}><Statistic title="致盲敌方(有效)" value={detail.data.analysis.utility.enemy_blind_s.toFixed(1) + "s"} /></Col>
+                    <Col span={8}><Statistic title="致盲队友(失误)" value={(detail.data.analysis.utility.team_blind_s ?? 0).toFixed(1) + "s"} /></Col>
+                  </Row>
+                ) : null}
+                {detail.data.analysis.utility?.usage?.length ? (
+                  <Table
+                    size="small"
+                    pagination={false}
+                    rowKey="grenade_type"
+                    dataSource={detail.data.analysis.utility.usage}
+                    columns={[
+                      { title: "道具", dataIndex: "grenade_type", width: 100 },
+                      { title: "购买", dataIndex: "bought", width: 70 },
+                      { title: "投掷", dataIndex: "thrown", width: 70 },
+                      {
+                        title: "买了没扔",
+                        dataIndex: "waste_rate",
+                        render: (v: number | null) =>
+                          v == null ? "—" : (
+                            <span style={{ color: v >= 0.3 ? "#cf1322" : undefined }}>{(v * 100).toFixed(0)}%</span>
+                          ),
+                      },
+                    ]}
+                  />
+                ) : null}
                 <Button size="small" loading={loadV1.isPending} onClick={() => loadV1.mutate()}>
                   载入全场详细数据（10 人）
                 </Button>
