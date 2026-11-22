@@ -9,6 +9,53 @@ from ..models import ChatMessage, ChatSession, PlayerProfile, Report
 from .ai_client import AiError, build_ai_client, load_prompt
 
 
+async def chat_stream(user_content: str, session_id: int | None = None, session_factory_fn=None):
+    """流式对话：返回 SSE 生成器（delta/done 事件）；结束时持久化 assistant 消息。"""
+    import json as _json
+
+    sf = session_factory_fn or session_factory
+    with sf() as session:
+        if session_id is None:
+            cs = ChatSession(title=user_content[:20] or "新对话")
+            session.add(cs)
+            session.commit()
+            session.refresh(cs)
+            session_id = cs.id
+        else:
+            cs = session.get(ChatSession, session_id)
+            if cs is not None and cs.title == "新对话":
+                cs.title = user_content[:20] or "新对话"
+                session.add(cs)
+        session.add(ChatMessage(session_id=session_id, role="user", content=user_content))
+        session.commit()
+
+    instruction = _build_instruction()
+    with sf() as session:
+        history = session.exec(
+            select(ChatMessage).where(ChatMessage.session_id == session_id).order_by(ChatMessage.id)
+        ).all()
+    history_text = "\n".join(f"[{m.role}] {m.content}" for m in history)
+    with sf() as session:
+        ai = build_ai_client(session)
+
+    async def gen():
+        full: list[str] = []
+        try:
+            async for delta in ai.chat_stream(instruction, history_text):
+                full.append(delta)
+                yield f"data: {_json.dumps({'delta': delta}, ensure_ascii=False)}\n\n"
+            reply = "".join(full)
+            with sf() as session:
+                session.add(ChatMessage(session_id=session_id, role="assistant", content=reply))
+                session.commit()
+            yield f"data: {_json.dumps({'done': True, 'session_id': session_id}, ensure_ascii=False)}\n\n"
+        except AiError as exc:
+            logger.warning(f"[AI教练] 会话 {session_id} 流式调用失败：{exc}")
+            yield f"data: {_json.dumps({'error': str(exc)}, ensure_ascii=False)}\n\n"
+
+    return gen()
+
+
 def _build_instruction() -> str:
     """注入玩家画像 + 最近复盘（教练答的是'你'，不是通用攻略）。"""
     parts = [load_prompt("coach") or "你是用户的专属 CS2 教练，回答具体、可执行、不套话，中文。"]

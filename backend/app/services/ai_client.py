@@ -1,6 +1,8 @@
 """AI 客户端：OpenAI 兼容接口（DeepSeek/GLM 均兼容），provider/base_url/key 从 settings 读。"""
 from __future__ import annotations
 
+import json
+
 import httpx
 
 from ..config import get_project_root
@@ -69,6 +71,40 @@ class AiClient:
         if not text:
             raise AiError(f"MindVault AI 返回空内容：{str(data)[:200]}")
         return str(text)
+
+    async def chat_stream(self, system: str, user: str):
+        """流式补全：逐段 yield 文本增量。mindvault 桥不支持流式 → 单段返回。"""
+        if self.provider == "mindvault":
+            if not self.mv_base_url:
+                raise AiError("provider=mindvault 但未配置 mv.base_url")
+            text = await self._chat_via_mindvault(system, user)
+            yield text
+            return
+        payload: dict = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "stream": True,
+        }
+        if self.provider == "deepseek":
+            payload["reasoning_effort"] = "none"
+        headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+        try:
+            async with self._http.stream("POST", f"{self.base_url}/chat/completions", json=payload, headers=headers) as resp:
+                if resp.status_code != 200:
+                    body = (await resp.aread()).decode("utf-8", "ignore")
+                    raise AiError(f"AI 返回 HTTP {resp.status_code}：{body[:200]}")
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data:") or line.strip() == "data: [DONE]":
+                        continue
+                    chunk = json.loads(line[len("data:"):].strip())
+                    delta = ((chunk.get("choices") or [{}])[0].get("delta") or {}).get("content")
+                    if delta:
+                        yield delta
+        except httpx.HTTPError as exc:
+            raise AiError(f"AI 服务不可达：{exc}") from exc
 
     async def chat(self, system: str, user: str) -> str:
         """单轮补全；provider=mindvault 走 AI 桥，其余 OpenAI 兼容。结构化提取关闭思考模式。"""

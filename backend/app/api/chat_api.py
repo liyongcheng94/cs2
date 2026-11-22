@@ -1,13 +1,12 @@
-"""AI 教练对话 API：会话 CRUD + 一轮对话。"""
+"""AI 教练对话 API：会话 CRUD + 一轮对话 + 流式（SSE）。"""
 from __future__ import annotations
 
-import asyncio
-
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from ..database import SessionDep
-from ..services.chat_coach import chat, delete_session, list_messages, list_sessions
+from ..services.chat_coach import chat, chat_stream, delete_session, list_messages, list_sessions
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -52,3 +51,11 @@ async def send_message(body: ChatBody, session: SessionDep) -> dict:
     if out.get("reply") is None:
         raise HTTPException(status_code=502, detail=out.get("error") or "AI 调用失败")
     return out
+
+
+@router.post("/stream")
+async def stream_message(body: ChatBody, session: SessionDep) -> StreamingResponse:
+    if not body.content.strip():
+        raise HTTPException(status_code=400, detail="消息不能为空")
+    gen = await chat_stream(body.content.strip(), body.session_id)
+    return StreamingResponse(gen, media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
