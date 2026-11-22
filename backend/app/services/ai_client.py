@@ -1,0 +1,81 @@
+"""AI 客户端：OpenAI 兼容接口（DeepSeek/GLM 均兼容），provider/base_url/key 从 settings 读。"""
+from __future__ import annotations
+
+import httpx
+
+from ..config import get_project_root
+from ..database import SessionDep
+from ..services import settings_service
+
+# provider -> 默认 base_url（均为 OpenAI 兼容 chat/completions）
+PROVIDER_BASE_URLS = {
+    "deepseek": "https://api.deepseek.com/v1",
+    "glm": "https://open.bigmodel.cn/api/paas/v4",
+    "ollama": "http://127.0.0.1:11434/v1",
+}
+
+PROMPT_DIR = get_project_root() / "backend" / "app" / "ai_skills"
+
+
+class AiError(Exception):
+    """AI 调用失败（网络/HTTP/结构）。"""
+
+
+class AiClient:
+    def __init__(
+        self,
+        provider: str = "deepseek",
+        api_key: str = "",
+        base_url: str | None = None,
+        model: str | None = None,
+        transport: httpx.AsyncBaseTransport | None = None,
+        timeout: float = 120.0,
+    ):
+        self.provider = provider
+        self.api_key = api_key
+        self.base_url = (base_url or PROVIDER_BASE_URLS.get(provider, PROVIDER_BASE_URLS["deepseek"])).rstrip("/")
+        self.model = model or ("qwen2.5:7b" if provider == "ollama" else "deepseek-chat")
+        self._http = httpx.AsyncClient(transport=transport, timeout=timeout)
+
+    async def aclose(self) -> None:
+        await self._http.aclose()
+
+    async def chat(self, system: str, user: str) -> str:
+        """单轮补全；结构化提取任务关闭思考模式（provider 支持时）。"""
+        payload: dict = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "stream": False,
+        }
+        if self.provider == "deepseek":
+            payload["reasoning_effort"] = "disabled"  # 结构化提取：关闭思维链降延迟省成本
+        headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+        try:
+            resp = await self._http.post(f"{self.base_url}/chat/completions", json=payload, headers=headers)
+        except httpx.HTTPError as exc:
+            raise AiError(f"AI 服务不可达：{exc}") from exc
+        if resp.status_code != 200:
+            raise AiError(f"AI 返回 HTTP {resp.status_code}：{resp.text[:200]}")
+        try:
+            choice = resp.json()["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, ValueError) as exc:
+            raise AiError(f"AI 响应结构异常：{resp.text[:200]}") from exc
+        return choice
+
+
+def load_prompt(name: str) -> str:
+    """加载 backend/app/ai_skills/<name>.md 提示词资产。"""
+    path = PROMPT_DIR / f"{name}.md"
+    return path.read_text(encoding="utf-8") if path.exists() else ""
+
+
+def build_ai_client(session: SessionDep) -> AiClient:
+    """从 settings 构建 AI 客户端（key 加密存储）。"""
+    provider = settings_service.get_value(session, "ai.provider") or "deepseek"
+    key = settings_service.get_value(session, "ai.api_key") or ""
+    base = settings_service.get_value(session, f"ai.{provider}.base_url") or None
+    model = settings_service.get_value(session, f"ai.{provider}.model") or None
+    return AiClient(provider=provider, api_key=key, base_url=base, model=model)

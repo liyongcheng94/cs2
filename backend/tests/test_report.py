@@ -47,12 +47,14 @@ def test_source_hash_depends_on_match_and_prompt_version():
 
 def test_rule_based_focus_hard_redline_first():
     """
-    Given 对枪矩阵 0-5m 胜率 < 30%（硬红线）
+    Given 对枪矩阵 0-5m 胜率 0.22（< 30% 硬红线）
     When  rule_based_focus
     Then  今日唯一重点 = 近战急停（Rule-based 优先，AI 不自由发挥）
     """
-    focus = rule_based_focus(_analysis())
-    assert "近战" in focus and "急停" in focus
+    focus = rule_based_focus(
+        _analysis(duels={"by_weapon_distance": [{"distance": "0-5m", "weapon": "AK-47", "win_rate": 0.22}]})
+    )
+    assert focus is not None and "近战" in focus and "急停" in focus
 
 
 def test_rule_based_focus_utility_redline():
