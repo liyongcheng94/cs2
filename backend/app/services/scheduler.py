@@ -67,7 +67,7 @@ class Scheduler:
         self.last_run[name] = now or self._now_fn()
 
 
-def _create_and_run(task_type: str, payload: dict, priority: int) -> dict | None:
+async def _create_and_run(task_type: str, payload: dict, priority: int) -> dict | None:
     from . import task_manager
 
     with session_factory() as session:
@@ -75,7 +75,7 @@ def _create_and_run(task_type: str, payload: dict, priority: int) -> dict | None
             return None
         task = task_manager.create_task(session, task_type, payload, priority=priority)
         task_id = task.id
-    return asyncio.run(task_manager.run_task(task_id)) if task_id else None
+    return await task_manager.run_task(task_id) if task_id else None
 
 
 async def run_demo_analyze_batch(task: Task, session_factory_fn: Callable[[], Session]) -> dict:
@@ -118,11 +118,11 @@ async def run_forever(interval_s: int = 60) -> None:
                 sched.mark(name, now)
                 logger.info(f"[调度] 触发 {name}")
                 if name == "wanmei_sync":
-                    _create_and_run("wanmei_sync", {}, priority=3)
+                    await _create_and_run("wanmei_sync", {}, priority=3)
                 elif name == "demo_analyze_batch":
-                    _create_and_run("demo_analyze_batch", {}, priority=1)
+                    await _create_and_run("demo_analyze_batch", {}, priority=1)
                 elif name == "weekly_report":
-                    _create_and_run("weekly_report", {}, priority=4)
+                    await _create_and_run("weekly_report", {}, priority=4)
         except Exception:  # noqa: BLE001
             logger.exception("[调度] tick 异常（循环继续）")
         await asyncio.sleep(interval_s)

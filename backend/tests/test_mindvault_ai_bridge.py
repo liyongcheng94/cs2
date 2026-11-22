@@ -32,7 +32,7 @@ def test_mindvault_bridge_routes_custom_write():
     assert out == "AI生成内容"
     assert seen["body"]["action"] == "custom"
     assert seen["body"]["instruction"] == "系统指令"
-    assert seen["body"]["content"] == "用户内容"
+    assert seen["body"]["text"] == "用户内容"
 
 
 def test_mindvault_bridge_401_maps_to_ai_error():

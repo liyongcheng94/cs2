@@ -56,7 +56,7 @@ class AiClient:
             resp = await mv.request(
                 "POST",
                 "/api/ai/write",
-                json={"action": "custom", "content": user, "instruction": system},
+                json={"action": "custom", "text": user, "instruction": system},
             )
         except MindVaultError as exc:
             raise AiError(f"MindVault AI 桥失败：{exc}") from exc
