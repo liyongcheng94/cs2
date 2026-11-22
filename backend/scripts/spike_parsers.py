@@ -25,38 +25,43 @@ def bench(name: str, fn):
     _, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
     print(f"[{name}] cost={cost:.1f}s peak={peak / 1e6:.0f}MB err={err}")
-    return out
+    return out, err
 
 
 def spike_demoparser2(demo: Path) -> dict:
-    """demoparser2：直接按需提取四维事件（dict[str, DataFrame]）。"""
-    from demoparser2 import parse_demo
+    """demoparser2 按需提取：只取四维所需事件（评审约定：不建全量 DataFrame）。"""
+    from demoparser2 import DemoParser
 
-    out: dict = {}
-    kills = parse_demo(demo, ["total_rounds_played"], player=["steamid", "name", "team_name"], other=["total_rounds_played"])
-    out["player_death_rows"] = len(kills)
-    # 按需事件：死亡/投掷/致盲/回合
-    import demoparser2 as dp2
-
-    df = dp2.parse_demo(str(demo))
-    out["top_keys"] = sorted(df.keys())
-    for key in ("player_death", "grenade_throw", "player_blind", "round_start", "round_end", "bomb_planted"):
-        if key in df:
-            out[key] = int(len(df[key]))
+    p = DemoParser(str(demo))
+    header = p.parse_header()
+    events = p.parse_events(
+        ["player_death", "grenade_throw", "player_blind", "round_start", "round_end", "bomb_planted"]
+    )
+    out: dict = {
+        "header_map": header.get("map_name"),
+        "duration_s": header.get("duration"),
+        "event_rows": {k: int(len(v)) for k, v in events.items()},
+    }
+    # 对枪矩阵所需字段示例（player_death：武器/距离/先手判定基础）
+    pd = events.get("player_death")
+    if pd is not None and len(pd):
+        out["player_death_cols"] = sorted(list(pd.columns))[:24]
+        out["sample_kill"] = {c: (str(pd.iloc[0][c])) for c in ["attacker_name", "user_name", "dmg_weapon", "distance", "total_rounds_played"] if c in pd.columns}
     return out
 
 
 def spike_awpy(demo: Path) -> dict:
-    """awpy：高层 Demo 对象（内部 demoparser2，输出 polars）。"""
+    """awpy 3.x：Demo 对象（内部 demoparser2，输出 polars）。"""
     from awpy import Demo
 
-    d = Demo(path=str(demo), parse_props=None)
-    out: dict = {"top_keys": sorted(d.frames.keys()) if hasattr(d, "frames") else "n/a"}
-    for key in ("kills", "grenades", "bomb_planted", "rounds", "ticks"):
+    d = Demo(path=str(demo))
+    out: dict = {"props": [a for a in dir(d) if not a.startswith("_")][:30]}
+    for key in ("kills", "grenades", "bomb", "rounds", "ticks"):
         attr = getattr(d, key, None)
-        if attr is not None:
-            out[key] = int(getattr(attr, "height", 0))
-    out["ticks_rows"] = int(d.ticks.height) if hasattr(d, "ticks") else None
+        if attr is not None and hasattr(attr, "height"):
+            out[key] = int(attr.height)
+    if hasattr(d, "kills") and d.kills is not None and d.kills.height:
+        out["kills_cols"] = d.kills.columns[:24]
     return out
 
 
@@ -66,13 +71,14 @@ def main() -> None:
     size_mb = demo.stat().st_size / 1e6
     print(f"demo={demo} size={size_mb:.0f}MB")
     results = {"demo": str(demo), "size_mb": size_mb}
-    results["demoparser2"] = bench("demoparser2", lambda: spike_demoparser2(demo))
-    results["awpy"] = bench("awpy", lambda: spike_awpy(demo))
+    r1, e1 = bench("demoparser2", lambda: spike_demoparser2(demo))
+    results["demoparser2"] = r1 or {"error": e1}
+    r2, e2 = bench("awpy", lambda: spike_awpy(demo))
+    results["awpy"] = r2 or {"error": e2}
     out_file = Path(__file__).resolve().parents[2] / "docs" / "spike-results.json"
     out_file.parent.mkdir(parents=True, exist_ok=True)
     out_file.write_text(json.dumps(results, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
-    print(f"已写入 {out_file}")
-    print(json.dumps(results, ensure_ascii=False, indent=2, default=str)[:2000])
+    print(json.dumps(results, ensure_ascii=False, indent=2, default=str)[:3000])
 
 
 if __name__ == "__main__":

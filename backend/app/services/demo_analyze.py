@@ -20,8 +20,8 @@ from .demo_dl import DemoNotAvailableError, acquire_demo
 from .report import PromptVersion, build_report
 from .report_push import gc_raw_demo, push_report
 
-# 解析引擎（阶段 2b spike 后由 demo_analysis 模块注入，便于测试桩替换）
-run_analysis: Callable[[Path, str, str], tuple[FourDimAnalysis, dict]] | None = None
+# 解析引擎（awpy 选型，见 docs/spike-demo-parsers.md）；测试桩可 monkeypatch 替换
+from .demo_analysis import run_analysis  # noqa: E402
 
 # CPU 密集隔离：Semaphore(1) 串行防 OOM（评审确定）
 ANALYSIS_SEMAPHORE = asyncio.Semaphore(1)
