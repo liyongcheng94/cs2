@@ -71,7 +71,7 @@ def test_mock_flow_full_chain(client, stub_mv_override):
 
     # 四维分析已按 schema 落库
     detail = client.get(f"/api/matches/{matches[0]['id']}").json()
-    assert detail["analysis"]["schema_version"] == "1.0"
+    assert detail["analysis"]["schema_version"] == "1.1"
     assert detail["analysis"]["duels"]["by_weapon_distance"][0]["distance"] == "0-5m"
 
     # 幂等：重复跑 mock-flow 生成新 match（时间戳不同）但推送内容独立
