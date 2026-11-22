@@ -1,4 +1,4 @@
-"""四维 demo 分析引擎（选型：awpy 3.3.0 为主 + demoparser2 补 player_blind）。
+"""四维 demo 分析引擎（选型：awpy 3.3.0 统一解析；1.1 起致盲走 blinds 数据集，不再依赖 demoparser2）。
 
 口径约定（评审结论，详见 docs/spike-demo-parsers.md）：
 - 距离 = kills 帧 xyz 欧氏 × 0.01905（1 unit ≈ 1.905cm）→ 米，分桶 <5m / 5-15m / 15m+。
@@ -7,10 +7,12 @@
 - 劣势枪位（近似）：无队友支援（无同队 assister）且 (穿烟/被闪/15m+ 大狙) 之一。
 - 经济：round_economy 的 buy_type 分布；有效购买比例留 null（无总资金列，二期）。
 - 首杀转化率：user 队伍拿下回合首杀的回合中，最终该回合获胜的比例。
-- 道具：浪费率仅统计闪光弹（致盲人数=0 的投掷占比）；致盲时长中位数取 user 造成的敌方 blind_duration。
+- 道具（1.1）：blinds 数据集敌友拆分（敌方累计/队友失误/自闪排除）；闪光浪费率 = 1 - 有效闪/闪光投掷数；
+  blind_median_s 取敌方致盲时长真中位数。
 """
 from __future__ import annotations
 
+import statistics
 import time
 import tracemalloc
 
@@ -56,7 +58,10 @@ def distance_bucket(dist_m: float) -> str:
     return "15m+"
 
 
-def _xyz_dist(ax, ay, az, vx, vy, vz) -> float:
+def _xyz_dist(ax, ay, az, vx, vy, vz) -> float | None:
+    """欧氏距离（米）；任一坐标缺失（炸弹/世界击杀等）返回 None。"""
+    if None in (ax, ay, az, vx, vy, vz):
+        return None
     return ((ax - vx) ** 2 + (ay - vy) ** 2 + (az - vz) ** 2) ** 0.5 * UNIT_TO_M
 
 
@@ -87,13 +92,13 @@ def analyze_deaths(kills, rounds, steam_id: int):
         no_support = r.get("assister_steamid") is None and not bool(r.get("victim_traded"))
         disadvantaged = bool(no_support) and (
             bool(r.get("thrusmoke")) or bool(r.get("attackerblind"))
-            or (r.get("weapon") in AWP_LIKE and dist_m > 15)
+            or (r.get("weapon") in AWP_LIKE and dist_m is not None and dist_m > 15)
         )
         events.append(DeathEvent(
             round_no=rn,
             tick=int(r["tick"]),
             killer_weapon=r.get("weapon"),
-            distance_m=round(dist_m, 1),
+            distance_m=round(dist_m, 1) if dist_m is not None else None,
             first_duel=(first_kill_tick.get(rn) == int(r["tick"])),
             teammate_support=not no_support,
             disadvantaged_position=bool(disadvantaged),
@@ -102,7 +107,9 @@ def analyze_deaths(kills, rounds, steam_id: int):
         ))
     buckets: dict[str, dict] = {}
     for e in events:
-        b = distance_bucket(e.distance_m or 99)
+        if e.distance_m is None:  # 炸弹/世界击杀无坐标，不入距离桶
+            continue
+        b = distance_bucket(e.distance_m)
         buckets.setdefault(b, {"deaths": 0})
         buckets[b]["deaths"] += 1
     disadvantaged_rate = (
@@ -123,6 +130,8 @@ def analyze_duels(kills, steam_id: int) -> DuelDim:
     for r in involved.to_dicts():
         dist_m = _xyz_dist(r.get("attacker_x"), r.get("attacker_y"), r.get("attacker_z"),
                            r.get("victim_x"), r.get("victim_y"), r.get("victim_z"))
+        if dist_m is None:  # 炸弹/世界击杀不可定位，不入对枪矩阵
+            continue
         wclass = weapon_class(r.get("weapon"))
         bucket = distance_bucket(dist_m)
         key = (bucket, wclass)
@@ -172,8 +181,15 @@ def analyze_economy(demo, kills, rounds, steam_id: int, user_side: str | None) -
     )
 
 
-def analyze_utility(demo, grenades, steam_id: int, user_entity_ids: set[int]) -> UtilityDim:
-    """道具：投掷清单（按 entity_id 去重——grenades 帧是逐 tick 轨迹，非事件）+ 闪光浪费率 + 致盲中位数。"""
+def analyze_utility(demo, grenades, steam_id: int) -> UtilityDim:
+    """道具：投掷清单（按 entity_id 去重——grenades 帧是逐 tick 轨迹，非事件）+ awpy blinds 敌友拆分 + 闪光浪费率。
+
+    1.1 口径：blinds 数据集 attacker=投掷者、victim=被致盲者。
+    - victim_side != attacker_side → 敌方致盲（有效），累计 enemy_blind_s；
+    - victim_side == attacker_side 且 victim != attacker → 队友致盲（失误），累计 team_blind_s；
+    - 自闪（victim == attacker）不计入任一侧；duration <= 0.1s 视为擦过不计入。
+    - blind_median_s 取敌方致盲时长的真中位数（偶数个取中间两数均值）。
+    """
     my = (
         grenades.filter(col("thrower_steamid") == steam_id)
         .unique(subset=["entity_id"])
@@ -181,23 +197,24 @@ def analyze_utility(demo, grenades, steam_id: int, user_entity_ids: set[int]) ->
     )
     throws = [ThrowEvent(round_no=None, grenade_type=r.get("type"), effective=None) for r in my]
 
-    blind_seconds: list[float] = []
-    flash_thrown = 0
-    flash_effective = 0
-    try:
-        from demoparser2 import DemoParser
+    enemy_durs: list[float] = []
+    enemy_blind_s = 0.0
+    team_blind_s = 0.0
+    blinds = getattr(demo, "blinds", None)
+    if blinds is not None and blinds.height:
+        for r in blinds.filter(col("attacker_steamid") == steam_id).to_dicts():
+            dur = float(r.get("duration") or 0)
+            if dur <= 0.1 or r.get("victim_steamid") == steam_id:
+                continue
+            if r.get("victim_side") == r.get("attacker_side"):
+                team_blind_s += dur
+            else:
+                enemy_blind_s += dur
+                enemy_durs.append(dur)
 
-        blind = DemoParser(str(demo.path)).parse_event("player_blind", other=["attacker_steamid", "user_steamid"])
-        if len(blind):
-            mine = blind[blind["attacker_steamid"].astype("string") == str(steam_id)]
-            vals = [float(x) for x in mine["blind_duration"].tolist() if float(x) > 0.1]
-            blind_seconds = vals
-            flash_thrown = sum(1 for t in throws if (t.grenade_type or "").lower() in ("flashbang", "flash"))
-            flash_effective = len([s for s in blind_seconds if s > 0.5]) if flash_thrown else 0
-    except Exception as exc:  # noqa: BLE001
-        logger.warning(f"[demo解析] player_blind 提取失败（致盲指标留 null）：{exc}")
-
-    blind_median = sorted(blind_seconds)[len(blind_seconds) // 2] if blind_seconds else None
+    flash_thrown = sum(1 for t in throws if (t.grenade_type or "").lower() in ("flashbang", "flash"))
+    flash_effective = len([d for d in enemy_durs if d > 0.5]) if flash_thrown else 0
+    blind_median = statistics.median(enemy_durs) if enemy_durs else None
     waste_rate = (
         round(max(0, flash_thrown - flash_effective) / flash_thrown, 3)
         if flash_thrown else None
@@ -206,6 +223,8 @@ def analyze_utility(demo, grenades, steam_id: int, user_entity_ids: set[int]) ->
         throws=throws,
         blind_median_s=round(blind_median, 2) if blind_median is not None else None,
         waste_rate=waste_rate,
+        enemy_blind_s=round(enemy_blind_s, 2),
+        team_blind_s=round(team_blind_s, 2),
     )
 
 
@@ -229,7 +248,7 @@ def run_analysis(dem_path, match_id: str, steam_id: str) -> tuple[FourDimAnalysi
         deaths_dim, _events = analyze_deaths(kills, rounds, sid)
         duels_dim = analyze_duels(kills, sid)
         economy_dim = analyze_economy(demo, kills, rounds, sid, user_side)
-        utility_dim = analyze_utility(demo, grenades, sid, set())
+        utility_dim = analyze_utility(demo, grenades, sid)
 
         analysis = FourDimAnalysis(
             match_id=match_id,

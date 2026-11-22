@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
 
 DistanceBucket = Literal["0-5m", "5-15m", "15m+"]
 
@@ -70,8 +70,10 @@ class ThrowEvent(BaseModel):
 
 class UtilityDim(BaseModel):
     throws: list[ThrowEvent] = Field(default_factory=list)
-    blind_median_s: float | None = None  # 致盲时长中位数（抗离群值）
-    waste_rate: float | None = None  # 未致盲/未造成伤害的投掷物占比
+    blind_median_s: float | None = None  # 致盲敌方时长中位数（抗离群值；1.1 口径仅敌方）
+    waste_rate: float | None = None  # 闪光浪费率：1 - 有效闪（敌方致盲>0.5s 数）/ 闪光投掷数
+    enemy_blind_s: float | None = None  # 1.1：致盲敌方累计秒数（>0.1s 计入，自闪排除）
+    team_blind_s: float | None = None  # 1.1：致盲队友累计秒数（>0.1s 计入，自闪排除）
 
 
 class AnalysisMeta(BaseModel):
