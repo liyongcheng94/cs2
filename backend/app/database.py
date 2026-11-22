@@ -26,7 +26,27 @@ def get_engine():
 
 
 def create_db_and_tables() -> None:
-    SQLModel.metadata.create_all(get_engine())
+    engine = get_engine()
+    SQLModel.metadata.create_all(engine)
+    _run_migrations(engine)
+
+
+# 轻量迁移（幂等：列已存在时忽略报错）。结构变更后在此追加。
+_MIGRATIONS = [
+    "ALTER TABLE matchstat ADD COLUMN we REAL",
+]
+
+
+def _run_migrations(engine) -> None:
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        for sql in _MIGRATIONS:
+            try:
+                conn.execute(text(sql))
+                conn.commit()
+            except Exception:  # noqa: BLE001 — 列已存在
+                conn.rollback()
 
 
 def get_session():

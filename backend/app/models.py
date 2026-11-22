@@ -65,6 +65,7 @@ class MatchStat(SQLModel, table=True):
     adr: float | None = None
     rws: float | None = None
     hs_rate: float | None = None
+    we: float | None = None  # WE 评分（完美平台口径）
     kills: int | None = None
     deaths: int | None = None
     assists: int | None = None

@@ -112,14 +112,16 @@ class WanmeiAPI(_BaseClient):
         self.steam_id = str(steam_id)
 
     async def _unwrap_data(self, resp: httpx.Response) -> dict:
+        """兼容两种响应封装：新 {statusCode, data} 与文档旧 {code, result}。"""
         data = self._parse_json(resp)
-        code = data.get("code")
-        if code == 0:
-            result = data.get("result")
-            return result if isinstance(result, dict) else {}
-        if code in AUTH_BROKEN_CODES:
-            raise WanmeiAuthError(f"完美平台 token 失效：{data.get('description')}")
-        raise WanmeiError(f"完美平台接口错误 code={code}：{data.get('description')}")
+        status = data.get("statusCode", data.get("code"))
+        if status == 0:
+            payload = data.get("data") if "data" in data else data.get("result")
+            return payload if isinstance(payload, dict) else {}
+        msg = data.get("errorMessage") or data.get("description") or ""
+        if status in AUTH_BROKEN_CODES:
+            raise WanmeiAuthError(f"完美平台 token 失效：{msg}")
+        raise WanmeiError(f"完美平台接口错误 statusCode={status}：{msg}")
 
     async def match_list(self, page: int = 1, page_size: int = 20) -> dict:
         """对局列表（dataSource=3 为对战记录；按 csgoSeasonId=recent 取最近赛季）。"""

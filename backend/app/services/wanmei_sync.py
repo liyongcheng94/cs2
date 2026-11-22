@@ -16,7 +16,15 @@ PAGE_INTERVAL_S = 2.0  # ≥2s/请求限速
 
 
 def _parse_played_at(raw: dict) -> datetime:
-    ts = raw.get("matchTime") or raw.get("createTime") or raw.get("time") or 0
+    """优先 startTime 字符串（平台本地时区，naive 存储），其次 timeStamp 秒级。"""
+    start = raw.get("startTime")
+    if isinstance(start, str) and start:
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
+            try:
+                return datetime.strptime(start, fmt)
+            except ValueError:
+                continue
+    ts = raw.get("timeStamp") or raw.get("matchTime") or 0
     try:
         ts = int(ts)
         if ts > 10**12:  # 毫秒时间戳
@@ -27,16 +35,21 @@ def _parse_played_at(raw: dict) -> datetime:
 
 
 def upsert_match(session: Session, raw: dict, my_steam_id: str) -> Match:
-    """按 matchId 幂等写入 Match + MatchStat（重复同步不产生新行）。"""
+    """按 matchId 幂等写入 Match + MatchStat（重复同步不产生新行）。
+
+    真实结构（2026-11-22 实测）：winTeam/team 为 1/2 整数，胜负 = winTeam == team；
+    mapName 为中文名；mvp/pvpMvp 为布尔；we 为 WE 评分；startTime 为本地时间字符串。
+    """
     match_id = str(raw.get("matchId") or "")
     if not match_id:
         raise ValueError(f"对局记录缺 matchId：{str(raw)[:120]}")
-    score1, score2 = int(raw.get("score1") or 0), int(raw.get("score2") or 0
-    )
-    win_team = str(raw.get("winTeam") or "")
-    win = win_team in ("1", "team1", raw.get("team")) or (
-        score1 > score2 and raw.get("camp") in (None, "", 1, "1")
-    )
+    score1, score2 = int(raw.get("score1") or 0), int(raw.get("score2") or 0)
+    win_team, my_team = raw.get("winTeam"), raw.get("team")
+    if win_team is not None and my_team is not None:
+        win = str(win_team) == str(my_team)
+    else:  # 兜底：比分 + 己方默认 1 队
+        win = score1 > score2 if my_team in (1, "1", None) else score2 > score1
+
     existing = session.exec(select(Match).where(Match.match_id == match_id)).first()
     if existing is None:
         match = Match(
@@ -57,32 +70,26 @@ def upsert_match(session: Session, raw: dict, my_steam_id: str) -> Match:
         match.win = win
         match.raw = raw
 
-    stat = session.exec(select(MatchStat).where(MatchStat.match_id == match_id)).first()
+    mvp = raw.get("mvp") or raw.get("pvpMvp")
     fields = {
         "rating": raw.get("rating"),
         "pw_rating": raw.get("pwRating"),
-        "adr": raw.get("adr") or raw.get("damage"),
         "rws": raw.get("rws"),
         "hs_rate": raw.get("headshotRate") or raw.get("hsRate"),
         "kills": raw.get("kill"),
         "deaths": raw.get("death"),
         "assists": raw.get("assist"),
-        "mvp": raw.get("mvp") or raw.get("pvpMvp"),
-        "k2": raw.get("k2"),
-        "k3": raw.get("k3"),
+        "mvp": int(bool(mvp)) if mvp is not None else None,
+        "we": raw.get("we"),
         "k4": raw.get("k4"),
         "k5": raw.get("k5"),
-        "vs1": raw.get("vs1"),
-        "vs2": raw.get("vs2"),
-        "vs3": raw.get("vs3"),
-        "vs4": raw.get("vs4"),
-        "vs5": raw.get("vs5"),
     }
     fields = {k: v for k, v in fields.items() if v is not None}
+    stat = session.exec(select(MatchStat).where(MatchStat.match_id == match_id)).first()
     if stat is None:
         stat = MatchStat(match_id=match_id, **fields, raw={"mySteamId": my_steam_id})
         session.add(stat)
-    elif fields:
+    else:
         for k, v in fields.items():
             setattr(stat, k, v)
         stat.raw = {"mySteamId": my_steam_id}
@@ -103,7 +110,7 @@ async def sync_matches(
     for page in range(1, max_pages + 1):
         result = await api.match_list(page=page, page_size=page_size)
         pages_fetched = page
-        rows = result.get("dataList") or result.get("list") or []
+        rows = result.get("matchList") or result.get("dataList") or result.get("list") or []
         if not rows:
             break
         with session_factory() as session:

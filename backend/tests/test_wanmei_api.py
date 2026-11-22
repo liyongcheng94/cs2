@@ -102,34 +102,48 @@ def test_sync_task_upserts_matches_idempotently(client, monkeypatch):
     rows = [
         {
             "matchId": "PVP@A1",
-            "mapName": "de_dust2",
-            "score1": 13,
-            "score2": 9,
-            "winTeam": "1",
-            "matchTime": 1752800000000,
-            "rating": 1.15,
-            "kill": 22,
-            "death": 15,
+            "mapName": "荒漠迷城",
+            "score1": 4,
+            "score2": 13,
+            "winTeam": 2,
+            "team": 2,  # 己方在 2 队且 2 队胜 → 胜
+            "startTime": "2026-11-21 20:04:01",
+            "rating": 1.19,
+            "pwRating": 1.33,
+            "kill": 13,
+            "death": 9,
+            "assist": 9,
+            "mvp": False,
+            "pvpMvp": True,
+            "we": 11.83,
+            "timeStamp": 1795263938,
         },
         {
             "matchId": "PVP@B2",
-            "mapName": "de_mirage",
-            "score1": 7,
+            "mapName": "荒漠迷城",
+            "score1": 4,
             "score2": 13,
-            "winTeam": "2",
-            "matchTime": 1752700000000,
-            "rating": 0.85,
-            "kill": 10,
-            "death": 18,
+            "winTeam": 2,
+            "team": 1,  # 己方在 1 队且 2 队胜 → 负
+            "startTime": "2026-11-21 18:06:43",
+            "rating": 0.52,
+            "kill": 6,
+            "death": 13,
+            "we": 5.21,
         },
     ]
 
     class StubAPI(WanmeiAPI):
         def __init__(self):
-            super().__init__(token="t", steam_id="76561198929200000", transport=httpx.MockTransport(lambda r: httpx.Response(200, json={"code": 0})))
+            super().__init__(
+                token="t",
+                steam_id="76561198929200000",
+                transport=httpx.MockTransport(lambda r: httpx.Response(200, json={"code": 0})),
+            )
 
         async def match_list(self, page=1, page_size=20):
-            return {"dataList": rows if page == 1 else [], "total": len(rows)}
+            # 解包后的 data 对象（真实信封 {statusCode,data:{matchList}} 由 _unwrap_data 剥离）
+            return {"matchList": rows if page == 1 else []}
 
     monkeypatch.setattr(wanmei_sync, "build_api_from_settings", lambda session: StubAPI())
 
@@ -150,6 +164,13 @@ def test_sync_task_upserts_matches_idempotently(client, monkeypatch):
     assert len(matches) == 2
     ids = {m["match_id"] for m in matches}
     assert ids == {"PVP@A1", "PVP@B2"}
+    # 真实字段映射：胜负用 winTeam==team 精确判定（不再靠比分启发式）
+    wins = {m["match_id"]: m["win"] for m in matches}
+    assert wins == {"PVP@A1": True, "PVP@B2": False}
+    # WE 评分与新迁移列
+    detail = client.get(f"/api/matches/{matches[0]['id']}").json()
+    assert detail["stat"]["we"] == 11.83
+    assert detail["match"]["map_name"] == "荒漠迷城"
 
 
 def test_sync_task_auth_failure_becomes_need_auth(client, monkeypatch):

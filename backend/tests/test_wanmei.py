@@ -100,7 +100,7 @@ async def test_match_list_passes_token_headers_and_parses():
     Given 已登录 token
     When  match_list(page=1)
     Then  POST api.wmpvp.com/api/csgo/home/match/list 带 token/platform/appversion 头，
-          body 含 mySteamId/dataSource/page，返回对局列表原始结构
+          body 含 mySteamId/dataSource/page；2026-11 真实信封 {statusCode,data:{matchList}} 解包为 data
     """
     seen = {}
 
@@ -111,14 +111,15 @@ async def test_match_list_passes_token_headers_and_parses():
         return httpx.Response(
             200,
             json={
-                "code": 0,
-                "result": {"dataList": [{"matchId": "PVP@X1", "mapName": "de_dust2"}], "total": 1},
+                "statusCode": 0,
+                "errorMessage": "",
+                "data": {"matchList": [{"matchId": "PVP@X1", "mapName": "荒漠迷城"}]},
             },
         )
 
     api = WanmeiAPI(token="tok-1", steam_id="76561198929200000", transport=httpx.MockTransport(handler))
     out = await api.match_list(page=1, page_size=20)
-    assert out["dataList"][0]["matchId"] == "PVP@X1"
+    assert out["matchList"][0]["matchId"] == "PVP@X1"
     assert seen["token"] == "tok-1"
     assert seen["platform"] == "android"
     assert seen["body"]["mySteamId"] == "76561198929200000"
