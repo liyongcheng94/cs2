@@ -1,5 +1,6 @@
 """周报契约：近7天聚合 → MindVault「CS2周报」推送；调度周日 21:00 窗口。"""
 import asyncio
+import json
 from datetime import datetime
 
 from sqlmodel import select
@@ -50,9 +51,9 @@ def test_scheduler_weekly_sunday_window(client):
 
 def test_weekly_report_handler_pushes(client, monkeypatch):
     """
-    Given MindVault 桩
+    Given MindVault 桩 + AI 桩
     When  执行 weekly_report
-    Then  created=True 且 uuid 返回
+    Then  created=True、uuid 返回、Markdown 含 AI 周评段落
     """
     import app.services.weekly as wk
     from app.services.mindvault_client import MindVaultClient
@@ -62,9 +63,22 @@ def test_weekly_report_handler_pushes(client, monkeypatch):
             super().__init__(base_url="http://stub")
 
         async def push_note(self, title, content, topic_name=None, topic_id=None):
+            assert "AI 周评" in content  # AI 周评段落在 Markdown 里
             return {"uuid": "weekly-u1"}
 
+    async def fake_ai_chat(self, system, user):
+        data = json.loads(user)
+        assert data["本周数据"]["matches"] >= 3
+        return "周评：胜率 67% 高于你的历史基线，下周继续 Retake 补枪专项。"
+
+    class StubAI:
+        provider = "deepseek"
+
+        async def chat(self, system, user):
+            return await fake_ai_chat(self, system, user)
+
     monkeypatch.setattr(wk, "_new_mv", lambda: StubMV())
+    monkeypatch.setattr(wk, "build_ai_client", lambda session: StubAI())
     task = Task(id=1, type="weekly_report")
     out = asyncio.run(weekly_report_handler(task, session_factory))
     assert out["created"] is True and out["uuid"] == "weekly-u1"
