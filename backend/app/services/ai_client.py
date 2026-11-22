@@ -85,7 +85,7 @@ class AiClient:
             "stream": False,
         }
         if self.provider == "deepseek":
-            payload["reasoning_effort"] = "disabled"  # 结构化提取：关闭思维链降延迟省成本
+            payload["reasoning_effort"] = "none"  # 结构化提取：关闭思维链降延迟省成本（422 实测枚举为 none/minimal/low/...）
         headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
         try:
             resp = await self._http.post(f"{self.base_url}/chat/completions", json=payload, headers=headers)
