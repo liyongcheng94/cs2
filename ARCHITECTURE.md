@@ -58,12 +58,10 @@
 - 任务 moments_sync；ffmpeg 真实压缩链路已测试（test_compress_real_ffmpeg 用 ffmpeg 自生成源验证）。
 - 待真实数据：用户导出 ≥1 条时刻 → 推送 → 公网 MindVault 可播放。
 
-### [ ] 阶段 5：可视化增强 + 整合收口（1 天）
-- ECharts：对枪矩阵热力图（距离分桶 × 武器 → 胜率）；死亡还原 2D 雷达散点图（坐标映射 + 纯底图，>100 点 large:true）。
-- 完整版 skills：/cs2-review、/cs2-learn、/cs2-moments。
-- 周报周日；scheduler 全量启用；定时磁盘 GC；cf-tunnel 公网 + 密码。
-- verify.bat：pytest + tsc + mock-flow；每天收工前跑。
-- 闸门：公网 URL 全流程走通；verify.bat 全绿。
+### [~] 阶段 5：整合收口（2026-11-22 夜间大部分完成）
+- 已完成：scheduler 错峰接入 lifespan（每2h同步/凌晨03:30 demo批量，测试环境 CS2HQ_SCHEDULER=0 禁用）；skills /cs2-daily /cs2-review 就绪；设置页补 AI Key 与时刻目录字段；覆盖率门禁修订 87%（68 项依赖锁版）；verify.bat 同步。
+- 待办（晨间）：ECharts 对枪热力图/死亡散点（analysis JSON 已就绪）；周报周日推送；cf-tunnel 公网开启（URL 随机，晨间启动即可）；视频总结/道具库前端页面；完整版 /cs2-learn /cs2-moments skills。
+- 已知待修：平局场次胜负判定（等下批真实数据观察 winTeam 口径）。
 
 ## 禁区与回滚
 
