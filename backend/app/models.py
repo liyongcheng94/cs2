@@ -151,3 +151,19 @@ class SeasonStats(SQLModel, table=True):
     season_id: str = Field(index=True)  # 平台 seasonId（recent 时存实际返回值）
     payload: dict = Field(default_factory=dict, sa_column=Column(JSON))
     updated_at: datetime = Field(default_factory=utcnow, sa_type=NAIVE_DT)
+
+
+class ChatSession(SQLModel, table=True):
+    """AI 教练对话会话（多轮，历史持久化）。"""
+    id: int | None = Field(default=None, primary_key=True)
+    title: str = "新对话"
+    created_at: datetime = Field(default_factory=utcnow, sa_type=NAIVE_DT)
+
+
+class ChatMessage(SQLModel, table=True):
+    """对话消息（role: user/assistant）。"""
+    id: int | None = Field(default=None, primary_key=True)
+    session_id: int = Field(index=True, foreign_key="chatsession.id")
+    role: str
+    content: str
+    created_at: datetime = Field(default_factory=utcnow, sa_type=NAIVE_DT)
