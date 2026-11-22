@@ -22,7 +22,7 @@ async def test_push_note_calls_mcp_create_note():
 
     def handler(request: httpx.Request) -> httpx.Response:
         calls.append((request.method, request.url.path))
-        if request.url.path == "/api/topics":
+        if request.url.path == "/api/topics" and request.method == "GET":
             return httpx.Response(200, json=[{"id": 1, "name": "其他", "children": []}])
         if request.url.path == "/api/topics" and request.method == "POST":
             return httpx.Response(201, json={"id": 9, "name": "CS2复盘"})
@@ -119,9 +119,12 @@ async def test_password_login_and_401_retry():
                 200, json={"ok": True}, headers={"set-cookie": "mv_session=tok-1; Path=/"}
             )
         if request.url.path == "/api/health":
-            if request.headers.get("authorization") == "Bearer tok-1":
-                return httpx.Response(200, json={"status": "ok"})
-            return httpx.Response(401)
+            # 模拟令牌过期：第一次 401，重登后第二次 200
+            state.setdefault("health_calls", 0)
+            state["health_calls"] += 1
+            if state["health_calls"] == 1:
+                return httpx.Response(401)
+            return httpx.Response(200, json={"status": "ok"})
         return httpx.Response(404)
 
     client = MindVaultClient(

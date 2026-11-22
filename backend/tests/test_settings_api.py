@@ -1,6 +1,6 @@
 import sqlite3
 
-from app.config import get_db_path
+from app.database import get_db_path
 
 
 def _db_value_enc(key: str) -> str | None:
