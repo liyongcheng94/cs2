@@ -65,7 +65,7 @@ def test_chat_second_round_carries_history(client, stub_ai_bridge):
     client.post("/api/chat", json={"session_id": sid, "content": "第二问"})
     assert len(stub_ai_bridge) == 2
     # 第二轮的 content 应包含历史（user/assistant 标记）
-    assert "第一问" in stub_ai_bridge[1]["content"]
+    assert "第一问" in stub_ai_bridge[1]["text"]
 
 
 def test_chat_injects_context(client, stub_ai_bridge):
