@@ -23,6 +23,7 @@ import {
 import { apiGet, apiPost, apiPut } from "./api/client";
 import { DeathScatter } from "./components/DeathScatter";
 import { DuelHeatmap } from "./components/DuelHeatmap";
+import { CoachChat } from "./components/CoachChat";
 import { SeasonTrends } from "./components/SeasonTrends";
 import { WanmeiLogin } from "./components/WanmeiLogin";
 import type { MatchDetail, MatchSummary, MockFlowResult, Profile, TaskItem } from "./types";
@@ -551,6 +552,7 @@ export default function App() {
             { key: "overview", label: "总览", children: <OverviewPage /> },
             { key: "matches", label: "对局", children: <MatchesPage /> },
             { key: "learn", label: "学道具", children: <LearnPage /> },
+            { key: "chat", label: "AI 教练", children: <CoachChat /> },
             { key: "tasks", label: "任务", children: <TasksPage /> },
             { key: "settings", label: "设置", children: <SettingsPage /> },
           ]}
