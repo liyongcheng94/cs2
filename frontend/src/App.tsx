@@ -176,9 +176,9 @@ function MatchesPage() {
     },
     {
       title: "胜负",
-      dataIndex: "win",
-      key: "win",
-      render: (w: boolean) => (w ? <Tag color="green">胜</Tag> : <Tag color="red">负</Tag>),
+      key: "result",
+      render: (_: unknown, r: MatchSummary & { draw?: boolean }) =>
+        r.draw ? <Tag color="orange">平</Tag> : r.win ? <Tag color="green">胜</Tag> : <Tag color="red">负</Tag>,
     },
     { title: "模式", dataIndex: "mode", key: "mode" },
     {
@@ -244,7 +244,7 @@ function MatchesPage() {
             {detail.data.analysis ? (
               <>
                 <DuelHeatmap analysis={detail.data.analysis} />
-                <DeathScatter analysis={detail.data.analysis} />
+                <DeathScatter analysis={detail.data.analysis} mapEn={detail.data.match.map_en} />
                 <Row gutter={16}>
                   {detail.data.analysis.deaths?.disadvantaged_rate != null ? (
                     <Col span={8}><Statistic title="劣势枪位死亡率" value={(detail.data.analysis.deaths.disadvantaged_rate * 100).toFixed(0) + "%"} /></Col>

@@ -4,6 +4,21 @@ from sqlmodel import select
 from ..database import SessionDep
 from ..models import DemoAnalysis, Match, MatchStat, Report, SeasonStats
 
+
+# 完美平台中文地图名 → 英文 ID（雷达底图用）
+MAP_NAME_EN = {
+    "荒漠迷城": "de_mirage",
+    "炙热沙城Ⅱ": "de_dust2",
+    "炙热沙城": "de_dust2",
+    "炼狱小镇": "de_inferno",
+    "核子危机": "de_nuke",
+    "远古遗迹": "de_ancient",
+    "阿努比斯": "de_anubis",
+    "殒命大厦": "de_vertigo",
+    "死亡游乐园": "de_overpass",
+    "列车停放站": "de_train",
+}
+
 router = APIRouter(prefix="/matches", tags=["matches"])
 
 
@@ -29,6 +44,8 @@ def list_matches(session: SessionDep) -> list[dict]:
             "score1": m.score1,
             "score2": m.score2,
             "win": m.win,
+            "draw": (m.raw or {}).get("winTeam") == -1,  # 平局口径实测：winTeam=-1（2026-11-23）
+            "map_en": MAP_NAME_EN.get(m.map_name, ""),
             "mode": m.mode,
             "played_at": m.played_at.isoformat() if m.played_at else None,
             "demo_status": m.demo_status,

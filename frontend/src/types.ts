@@ -7,6 +7,8 @@ export interface MatchSummary {
   score1: number;
   score2: number;
   win: boolean;
+  draw?: boolean;
+  map_en?: string;
   mode: string;
   played_at: string | null;
   demo_status: string;

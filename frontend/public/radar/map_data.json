@@ -1,0 +1,51 @@
+{
+ "de_mirage": {
+  "pos_x": -3230.0,
+  "pos_y": 1713.0,
+  "scale": 5.0,
+  "width": 1024,
+  "height": 1024
+ },
+ "de_dust2": {
+  "pos_x": -2476.0,
+  "pos_y": 3239.0,
+  "scale": 4.4,
+  "width": 1024,
+  "height": 1024
+ },
+ "de_inferno": {
+  "pos_x": -2087.0,
+  "pos_y": 3870.0,
+  "scale": 4.9,
+  "width": 1024,
+  "height": 1024
+ },
+ "de_nuke": {
+  "pos_x": -3453.0,
+  "pos_y": 2887.0,
+  "scale": 7.0,
+  "width": 1024,
+  "height": 1024
+ },
+ "de_ancient": {
+  "pos_x": -2953.0,
+  "pos_y": 2164.0,
+  "scale": 5.0,
+  "width": 1024,
+  "height": 1024
+ },
+ "de_anubis": {
+  "pos_x": -2796.0,
+  "pos_y": 3328.0,
+  "scale": 5.22,
+  "width": 1024,
+  "height": 1024
+ },
+ "de_vertigo": {
+  "pos_x": -3168.0,
+  "pos_y": 1762.0,
+  "scale": 4.0,
+  "width": 1024,
+  "height": 1024
+ }
+}

@@ -235,3 +235,44 @@ def test_sync_saves_season_stats(client, monkeypatch):
     assert out["season_id"] == "s-9"
     assert out["data"]["adr"] == 73.95
     assert out["data"]["historyRatings"] == [1.1, 0.9]
+
+
+def test_sync_marks_draw_matches(client, monkeypatch):
+    """
+    Given 真实平局口径（winTeam=-1）的对局桩
+    When  同步入库并查询列表
+    Then  draw=True 且 win=False（UI 显示"平"而非"负"）
+    """
+    import httpx as _httpx
+
+    from app.services import wanmei_sync
+    from app.services.wanmei import WanmeiAPI
+
+    client.put("/api/settings", json={"wanmei.access_token": "tok", "wanmei.steam_id": "76561198339750836"})
+
+    class StubAPI(WanmeiAPI):
+        def __init__(self):
+            super().__init__(token="t", steam_id="76561198339750836", transport=_httpx.MockTransport(lambda r: _httpx.Response(200, json={"statusCode": 0})))
+
+        async def match_list(self, page=1, page_size=20):
+            if page > 1:
+                return {"matchList": []}
+            return {"matchList": [
+                {"matchId": "PVP@DRAW1", "mapName": "荒漠迷城", "score1": 12, "score2": 12,
+                 "winTeam": -1, "team": 1, "startTime": "2026-11-22 12:00:00"},
+                {"matchId": "PVP@WIN2", "mapName": "荒漠迷城", "score1": 13, "score2": 11,
+                 "winTeam": 1, "team": 1, "startTime": "2026-11-22 13:00:00"},
+            ]}
+
+        async def detail_stats(self, season_id="recent"):
+            return {"seasonId": "s"}
+
+    monkeypatch.setattr(wanmei_sync, "build_api_from_settings", lambda session: StubAPI())
+
+    task_id = client.post("/api/tasks", json={"type": "wanmei_sync"}).json()["id"]
+    client.post(f"/api/tasks/{task_id}/run")
+
+    matches = client.get("/api/matches").json()
+    by_id = {m["match_id"]: m for m in matches}
+    assert by_id["PVP@DRAW1"]["draw"] is True and by_id["PVP@DRAW1"]["win"] is False
+    assert by_id["PVP@WIN2"]["draw"] is False and by_id["PVP@WIN2"]["win"] is True
