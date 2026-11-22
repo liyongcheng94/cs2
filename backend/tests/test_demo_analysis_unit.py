@@ -180,6 +180,51 @@ def test_analyze_utility_tiny_blinds_ignored_and_empty():
     assert dim.waste_rate is None
 
 
+def test_analyze_deaths_world_kill_no_coords():
+    """
+    Given 炸弹/世界伤害击杀（attacker 无名字无坐标，weapon=planted_c4）
+    When  analyze_deaths
+    Then  不崩溃：distance_m=None、不入距离桶、劣势枪位仅按穿烟/被闪近似（False）
+    """
+    sid = 111
+    kills = _kills_frame([
+        {"attacker_steamid": None, "victim_steamid": sid, "attacker_side": None, "weapon": "planted_c4",
+         "tick": 100, "attacker_x": None, "attacker_y": None, "attacker_z": None,
+         "victim_x": 100, "victim_y": 50, "victim_z": 0,
+         "assister_steamid": None, "victim_traded": False, "thrusmoke": False, "attackerblind": False},
+        {"attacker_steamid": 222, "victim_steamid": sid, "attacker_side": "t", "weapon": "ak47", "tick": 300,
+         "attacker_x": 0, "attacker_y": 0, "attacker_z": 0, "victim_x": 200, "victim_y": 0, "victim_z": 0,
+         "assister_steamid": None, "victim_traded": False, "thrusmoke": False, "attackerblind": False},
+    ])
+    dim, events = analyze_deaths(kills, _rounds_frame(), sid)
+    assert len(events) == 2
+    world = events[0]
+    assert world.distance_m is None and world.killer_weapon == "planted_c4"
+    assert world.disadvantaged_position is False
+    assert all(b.distance for b in dim.buckets)  # 距离桶只含可定位死亡
+    assert [b.distance for b in dim.buckets] == ["0-5m"]
+
+
+def test_analyze_duels_skips_unlocatable_kills():
+    """
+    Given 对枪事件含无坐标行（炸弹击杀）
+    When  analyze_duels
+    Then  该行不进对枪矩阵，其余正常聚合
+    """
+    sid = 111
+    kills = _kills_frame([
+        {"attacker_steamid": None, "victim_steamid": sid, "attacker_side": None, "weapon": "planted_c4",
+         "tick": 100, "attacker_x": None, "attacker_y": None, "attacker_z": None,
+         "victim_x": 100, "victim_y": 50, "victim_z": 0,
+         "assister_steamid": None, "victim_traded": False, "thrusmoke": False, "attackerblind": False},
+        {"attacker_steamid": sid, "victim_steamid": 222, "attacker_side": "ct", "weapon": "m4a1", "tick": 200,
+         "attacker_x": 0, "attacker_y": 0, "attacker_z": 0, "victim_x": 200, "victim_y": 0, "victim_z": 0,
+         "assister_steamid": None, "victim_traded": False, "thrusmoke": False, "attackerblind": False},
+    ])
+    dim = analyze_duels(kills, sid)
+    assert [(b.distance, b.weapon) for b in dim.by_weapon_distance] == [("0-5m", "rifle")]
+
+
 def test_schema_version_bumped_to_1_1():
     """Given schema 迭代（blinds 拆分）When 导入 Then SCHEMA_VERSION=1.1 且 FourDimAnalysis 默认携带。"""
     from app.schemas.analysis import SCHEMA_VERSION, FourDimAnalysis
