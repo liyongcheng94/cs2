@@ -98,11 +98,15 @@ async def test_bili_learn_handler_degraded_flow(client, monkeypatch, tmp_path):
 
     pushed = []
 
-    async def fake_push(title, md, source_hash):
-        pushed.append(title)
-        return {"created": True, "uuid": "bili-u1"}
+    class StubMV:
+        async def push_note(self, title, content, topic_name=None, topic_id=None):
+            pushed.append(title)
+            return {"uuid": "bili-u1"}
 
-    monkeypatch.setattr(bl, "_push_summary", fake_push)
+        async def update_note(self, uuid, content=None, title=None):
+            return {"uuid": uuid}
+
+    monkeypatch.setattr(bl, "_new_mv", lambda: StubMV())
 
     client.put("/api/settings", json={"bili.sessdata": "SESS"})
     task_id = client.post("/api/tasks", json={"type": "bili_learn", "payload": {"keyword": "CS2"}}).json()["id"]

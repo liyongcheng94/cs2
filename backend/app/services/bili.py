@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import time
 import urllib.parse
 from typing import Any
@@ -108,6 +109,23 @@ async def search_videos(keyword: str, sessdata: str = "", page: int = 1) -> list
             })
         logger.info(f"[B站检索] keyword={keyword!r} page={page} 命中={len(out)}")
         return out
+
+
+async def resolve_bvid(url_or_bvid: str) -> str:
+    """b23.tv 短链 / 完整视频链接 / 裸 BV → 纯 BV 号（跟随重定向提取）。"""
+    s = (url_or_bvid or "").strip()
+    m = re.search(r"(BV[0-9A-Za-z]{10})", s)
+    if m:
+        return m.group(1)
+    if "b23.tv" in s or "bilibili.com" in s:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=False, headers=HEADERS) as client:
+            resp = await client.get(s if s.startswith("http") else f"https://{s}")
+        loc = resp.headers.get("location", "")
+        m = re.search(r"(BV[0-9A-Za-z]{10})", loc)
+        if m:
+            return m.group(1)
+        raise BiliError(f"短链解析失败：{loc[:120] or f'HTTP {resp.status_code}'}")
+    raise BiliError(f"无法从输入解析 BV 号：{s[:80]}")
 
 
 async def fetch_subtitle(bvid: str, sessdata: str) -> str | None:

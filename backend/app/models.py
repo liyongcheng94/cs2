@@ -115,6 +115,7 @@ class BiliVideo(SQLModel, table=True):
     owner: str | None = None
     origin: str = "manual"  # manual/search/following
     subtitle_status: str = "none"  # none/subtitle/no_subtitle/failed
+    mv_uuid: str | None = None  # MindVault 总结笔记（重学走更新不重复建）
     raw: dict = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=utcnow, sa_type=NAIVE_DT)
 

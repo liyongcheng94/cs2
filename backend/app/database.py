@@ -35,6 +35,7 @@ def create_db_and_tables() -> None:
 _MIGRATIONS = [
     "ALTER TABLE matchstat ADD COLUMN we REAL",
     "ALTER TABLE match ADD COLUMN detail_json JSON",
+    "ALTER TABLE bilivideo ADD COLUMN mv_uuid VARCHAR",
 ]
 
 
