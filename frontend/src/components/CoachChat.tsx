@@ -31,14 +31,41 @@ export function CoachChat() {
     queryFn: () => apiGet<MessageItem[]>(`/chat/sessions/${activeId}/messages`),
     enabled: activeId !== null,
   });
+  const [streaming, setStreaming] = useState<string | null>(null);
   const send = useMutation({
-    mutationFn: (content: string) => apiPost<{ session_id: number; reply: string }>("/chat", { session_id: activeId, content }),
-    onSuccess: (res) => {
-      setActiveId(res.session_id);
+    mutationFn: async (content: string) => {
+      const resp = await fetch("/api/chat/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: activeId, content }),
+      });
+      if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      let err: string | null = null;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const parts = buf.split("\n\n");
+        buf = parts.pop() ?? "";
+        for (const line of parts) {
+          if (!line.startsWith("data: ")) continue;
+          const e = JSON.parse(line.slice(6));
+          if (e.delta) setStreaming((s) => (s ?? "") + e.delta);
+          if (e.error) err = e.error;
+        }
+      }
+      if (err) throw new Error(err);
+    },
+    onSuccess: () => {
+      setStreaming(null);
       setInput("");
-      qc.invalidateQueries({ queryKey: ["chat-messages", res.session_id] });
+      qc.invalidateQueries({ queryKey: ["chat-messages", activeId ?? undefined] });
       qc.invalidateQueries({ queryKey: ["chat-sessions"] });
     },
+    onError: () => setStreaming(null),
   });
   const del = useMutation({
     mutationFn: (id: number) => apiDelete(`/chat/sessions/${id}`),
@@ -117,7 +144,15 @@ export function CoachChat() {
             )}
           />
         )}
-        {send.isPending ? <Text type="secondary">教练思考中…</Text> : null}
+        {streaming !== null ? (
+          <List.Item style={{ justifyContent: "flex-start" }}>
+            <div style={{ maxWidth: "80%", background: "#262626", padding: "8px 12px", borderRadius: 8, whiteSpace: "pre-wrap" }}>
+              <Text style={{ fontSize: 11, color: "#888" }}>教练</Text>
+              <div>{streaming || "…"}</div>
+            </div>
+          </List.Item>
+        ) : null}
+        {send.isPending && streaming === null ? <Text type="secondary">教练思考中…</Text> : null}
         <div ref={bottomRef} />
         <Space.Compact style={{ width: "100%", marginTop: 12 }}>
           <Input
