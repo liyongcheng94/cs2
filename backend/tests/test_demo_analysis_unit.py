@@ -1,10 +1,13 @@
 """四维分析引擎纯函数单测（合成 polars 帧，不依赖真实 demo）。"""
+from types import SimpleNamespace
+
 import polars as pl
 
 from app.services.demo_analysis import (
     _round_of_tick,
     analyze_deaths,
     analyze_duels,
+    analyze_utility,
     distance_bucket,
     weapon_class,
 )
@@ -112,3 +115,74 @@ def test_analyze_deaths_disadvantaged_approximation():
     assert events[0].disadvantaged_position is True
     assert events[0].distance_m is not None and events[0].distance_m > 15
     assert dim.disadvantaged_rate == 1.0
+
+
+def _blinds_frame(rows):
+    cols = ["attacker_steamid", "victim_steamid", "attacker_side", "victim_side", "duration"]
+    data = {c: [] for c in cols}
+    for r in rows:
+        for c in cols:
+            data[c].append(r.get(c))
+    return pl.DataFrame(data)
+
+
+def _grenades_frame(rows):
+    cols = ["entity_id", "thrower_steamid", "thrower_side", "type", "tick", "x", "y", "z"]
+    data = {c: [] for c in cols}
+    for r in rows:
+        for c in cols:
+            data[c].append(r.get(c))
+    return pl.DataFrame(data)
+
+
+def test_analyze_utility_blind_split_enemy_team():
+    """
+    Given user 造成 4 次致盲：敌方 2 次（2.5s / 0.8s）、队友 1 次（1.2s）、自己 1 次（0.6s）
+    When  analyze_utility（awpy blinds 口径）
+    Then  enemy_blind_s=3.3、team_blind_s=1.2，自闪不计入任一侧，
+          blind_median_s=敌方两次的中位数 1.65，闪光盘口径=有效闪 1/投掷 1 → waste 0.0
+    """
+    sid = 111
+    mate = 333
+    demo = SimpleNamespace(blinds=_blinds_frame([
+        {"attacker_steamid": sid, "victim_steamid": 222, "attacker_side": "ct", "victim_side": "t", "duration": 2.5},
+        {"attacker_steamid": sid, "victim_steamid": 444, "attacker_side": "ct", "victim_side": "t", "duration": 0.8},
+        {"attacker_steamid": sid, "victim_steamid": mate, "attacker_side": "ct", "victim_side": "ct", "duration": 1.2},
+        {"attacker_steamid": sid, "victim_steamid": sid, "attacker_side": "ct", "victim_side": "ct", "duration": 0.6},
+    ]))
+    grenades = _grenades_frame([
+        {"entity_id": 1, "thrower_steamid": sid, "thrower_side": "ct", "type": "flashbang", "tick": 100,
+         "x": 0, "y": 0, "z": 0},
+    ])
+    dim = analyze_utility(demo, grenades, sid)
+    assert dim.enemy_blind_s == 3.3
+    assert dim.team_blind_s == 1.2
+    assert dim.blind_median_s == 1.65
+    assert dim.waste_rate == 0.0  # 1 闪 1 有效（2.5s>0.5s）
+    assert [t.grenade_type for t in dim.throws] == ["flashbang"]
+
+
+def test_analyze_utility_tiny_blinds_ignored_and_empty():
+    """
+    Given 致盲事件仅 1 次队友 0.05s（低于 0.1s 阈值）且无投掷记录
+    When  analyze_utility
+    Then  enemy_blind_s=0.0、team_blind_s=0.0，blind_median_s/waste_rate 均 None（无可统计样本）
+    """
+    sid = 111
+    demo = SimpleNamespace(blinds=_blinds_frame([
+        {"attacker_steamid": sid, "victim_steamid": 333, "attacker_side": "ct", "victim_side": "ct", "duration": 0.05},
+    ]))
+    grenades = _grenades_frame([])
+    dim = analyze_utility(demo, grenades, sid)
+    assert dim.enemy_blind_s == 0.0
+    assert dim.team_blind_s == 0.0
+    assert dim.blind_median_s is None
+    assert dim.waste_rate is None
+
+
+def test_schema_version_bumped_to_1_1():
+    """Given schema 迭代（blinds 拆分）When 导入 Then SCHEMA_VERSION=1.1 且 FourDimAnalysis 默认携带。"""
+    from app.schemas.analysis import SCHEMA_VERSION, FourDimAnalysis
+
+    assert SCHEMA_VERSION == "1.1"
+    assert FourDimAnalysis(match_id="m").schema_version == "1.1"
