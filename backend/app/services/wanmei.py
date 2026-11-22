@@ -107,9 +107,30 @@ class PassportClient(_BaseClient):
 class WanmeiAPI(_BaseClient):
     """对局/统计数据接口（token 登录态）。"""
 
+    # v1 详情端点使用 Electron 桌面客户端 UA + accesstoken 头（CS2UID 实测契约）
+    V1_HEADERS_EXTRA = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) "
+            "perfectworldarena/1.0.24060811   Chrome/80.0.3987.163 Electron/8.5.5 Safari/537.36"
+        ),
+        "accesstoken": "",  # __init__ 时填 token
+    }
+    V1_APPVERSION = "3.4.6.164"
+
     def __init__(self, token: str, steam_id: str, transport: httpx.AsyncBaseTransport | None = None, timeout: float = 20.0):
         super().__init__(API_BASE, {**API_HEADERS_BASE, "token": token}, transport, timeout)
         self.steam_id = str(steam_id)
+        self.v1_headers = {**self._http.headers, **self.V1_HEADERS_EXTRA, "accesstoken": token, "appversion": self.V1_APPVERSION}
+
+    async def match_detail_v1(self, match_id: str) -> dict:
+        """对局详情（/api/v1/csgo/match）：base 比分/上下半场 + players 全场 10 人详细数据。"""
+        resp = await self._request(
+            "POST",
+            "/api/v1/csgo/match",
+            headers=self.v1_headers,
+            json={"matchId": match_id, "platform": "admin", "dataSource": 3},
+        )
+        return await self._unwrap_data(resp)
 
     async def _unwrap_data(self, resp: httpx.Response) -> dict:
         """兼容两种响应封装：新 {statusCode, data} 与文档旧 {code, result}。"""

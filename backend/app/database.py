@@ -34,6 +34,7 @@ def create_db_and_tables() -> None:
 # 轻量迁移（幂等：列已存在时忽略报错）。结构变更后在此追加。
 _MIGRATIONS = [
     "ALTER TABLE matchstat ADD COLUMN we REAL",
+    "ALTER TABLE match ADD COLUMN detail_json JSON",
 ]
 
 

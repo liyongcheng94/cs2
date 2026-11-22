@@ -55,6 +55,7 @@ class Match(SQLModel, table=True):
         default="none", index=True
     )  # none/pending_demo/downloaded/analyzed/failed
     raw: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    detail_json: dict | None = Field(default=None, sa_column=Column(JSON))  # v1 全场详细数据缓存
 
 
 class MatchStat(SQLModel, table=True):

@@ -1,8 +1,9 @@
 from fastapi import APIRouter, HTTPException
 from sqlmodel import select
 
-from ..database import SessionDep
+from ..database import SessionDep, session_factory
 from ..models import DemoAnalysis, Match, MatchStat, Report, SeasonStats
+from ..services.wanmei import WanmeiAuthError, WanmeiError
 
 
 # 完美平台中文地图名 → 英文 ID（雷达底图用）
@@ -80,3 +81,29 @@ def get_match(match_id: int, session: SessionDep) -> dict:
         "analysis": analysis.payload if analysis else None,
         "report": {"title": report.title, "pushed": report.pushed} if report else None,
     }
+
+
+@router.get("/{match_id}/detail-v1")
+async def match_detail_v1(match_id: int, session: SessionDep) -> dict:
+    """全场详细数据（v1 端点：双方 10 人 KAST/伤害/首杀/补枪/道具效果/命中率）；结果缓存进 Match.detail_json。"""
+    match = session.get(Match, match_id)
+    if match is None:
+        raise HTTPException(status_code=404, detail="对局不存在")
+    if match.detail_json:
+        return match.detail_json
+
+    from ..services.wanmei_sync import build_api_from_settings
+
+    try:
+        with session_factory() as s:
+            api = build_api_from_settings(s)
+        data = await api.match_detail_v1(match.match_id)
+    except WanmeiAuthError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except WanmeiError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    match.detail_json = data
+    session.add(match)
+    session.commit()
+    return data
