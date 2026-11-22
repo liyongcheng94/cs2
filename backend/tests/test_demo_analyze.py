@@ -33,6 +33,16 @@ def fake_pipeline(client, monkeypatch, tmp_path):
         return {"created": True, "uuid": "u-1", "reason": None, "match_id": analysis_arg.match_id}
 
     monkeypatch.setattr(da, "push_report", fake_push)
+
+    # 编排要求 Match 行先存在（由 wanmei_sync 建）；测试直接种两场
+    from app.database import session_factory
+    from app.models import Match
+
+    with session_factory() as s:
+        for mid in ("PVP@PIPE1", "PVP@PIPE2"):
+            s.add(Match(match_id=mid, map_name="de_mirage", win=True, played_at=__import__("datetime").datetime(2026, 11, 21)))
+        s.commit()
+
     return {"dem": dem, "analysis": analysis, "gc_calls": gc_calls, "pushed": pushed, "prompt_version": PromptVersion}
 
 
@@ -53,9 +63,6 @@ def test_demo_analyze_happy_path(client, fake_pipeline):
     assert body["status"] == "success", body["error"]
 
     # 解析与复盘落库
-    detail = client.get("/api/matches").json()
-    assert any(m["match_id"] == "PVP@PIPE1" for m in detail) is False  # match 行由同步任务建，此处不建
-
     from sqlmodel import select
 
     from app.database import session_factory
