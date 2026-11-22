@@ -143,3 +143,11 @@ class Clip(SQLModel, table=True):
     push_status: str = "none"  # none/pushed/degraded_to_card/failed
     mv_uuid: str | None = None
     created_at: datetime = Field(default_factory=utcnow, sa_type=NAIVE_DT)
+
+
+class SeasonStats(SQLModel, table=True):
+    """赛季统计快照（detailStats data 全量 JSON，趋势图/雷达/热图数据源）。"""
+    id: int | None = Field(default=None, primary_key=True)
+    season_id: str = Field(index=True)  # 平台 seasonId（recent 时存实际返回值）
+    payload: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=NAIVE_DT)

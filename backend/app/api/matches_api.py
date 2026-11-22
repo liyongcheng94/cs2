@@ -2,9 +2,20 @@ from fastapi import APIRouter, HTTPException
 from sqlmodel import select
 
 from ..database import SessionDep
-from ..models import DemoAnalysis, Match, MatchStat, Report
+from ..models import DemoAnalysis, Match, MatchStat, Report, SeasonStats
 
 router = APIRouter(prefix="/matches", tags=["matches"])
+
+
+@router.get("/stats/season")
+def season_stats(session: SessionDep) -> dict:
+    """赛季统计快照（趋势/雷达/热图数据源）。"""
+    row = session.exec(
+        select(SeasonStats).order_by(SeasonStats.updated_at.desc())
+    ).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="尚未同步赛季统计（先执行完美平台同步）")
+    return {"season_id": row.season_id, "data": row.payload, "updated_at": row.updated_at.isoformat()}
 
 
 @router.get("")

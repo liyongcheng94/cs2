@@ -8,7 +8,7 @@ from typing import Callable
 from loguru import logger
 from sqlmodel import Session, select
 
-from ..models import Match, MatchStat, Task, utcnow
+from ..models import Match, MatchStat, SeasonStats, Task, utcnow
 from .wanmei import WanmeiAPI
 
 MAX_PAGES_PER_RUN = 3  # 单次任务最多拉 3 页，防风控
@@ -105,7 +105,7 @@ async def sync_matches(
     max_pages: int = MAX_PAGES_PER_RUN,
     page_size: int = 20,
 ) -> dict:
-    """拉取对局列表并幂等入库；NEED_AUTH/普通异常向上抛给任务层分流。"""
+    """拉取对局列表 + 赛季统计并幂等入库；NEED_AUTH/普通异常向上抛给任务层分流。"""
     inserted, updated, pages_fetched = 0, 0, 0
     for page in range(1, max_pages + 1):
         result = await api.match_list(page=page, page_size=page_size)
@@ -128,7 +128,26 @@ async def sync_matches(
             break
         if page < max_pages:
             await asyncio.sleep(PAGE_INTERVAL_S)
-    return {"inserted": inserted, "updated": updated, "pages": pages_fetched}
+
+    # 赛季统计快照（总览页数据源；失败不阻断对局同步）
+    season_saved = False
+    try:
+        await asyncio.sleep(PAGE_INTERVAL_S)
+        stats = await api.detail_stats()
+        with session_factory() as session:
+            season_id = str(stats.get("seasonId") or "recent")
+            row = session.exec(select(SeasonStats).where(SeasonStats.season_id == season_id)).first()
+            if row is None:
+                row = SeasonStats(season_id=season_id)
+            row.payload = stats
+            row.updated_at = utcnow()
+            session.add(row)
+            session.commit()
+        season_saved = True
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"[完美同步] detailStats 拉取失败（不阻断）：{exc}")
+
+    return {"inserted": inserted, "updated": updated, "pages": pages_fetched, "season_stats": season_saved}
 
 
 def build_api_from_settings(session: Session) -> WanmeiAPI:

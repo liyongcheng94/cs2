@@ -198,3 +198,40 @@ def test_sync_task_auth_failure_becomes_need_auth(client, monkeypatch):
     body = client.get(f"/api/tasks/{task_id}").json()
     assert body["status"] == "NEED_AUTH"
     assert "token" in body["error"]
+
+
+def test_sync_saves_season_stats(client, monkeypatch):
+    """
+    Given API 桩返回真实形状 detailStats
+    When  执行 wanmei_sync
+    Then  SeasonStats 落库；GET /api/matches/stats/season 返回趋势数据
+    """
+    import httpx as _httpx
+
+    from app.services import wanmei_sync
+    from app.services.wanmei import WanmeiAPI
+
+    client.put("/api/settings", json={"wanmei.access_token": "tok", "wanmei.steam_id": "76561198339750836"})
+
+    class StubAPI(WanmeiAPI):
+        def __init__(self):
+            super().__init__(token="t", steam_id="76561198339750836", transport=_httpx.MockTransport(lambda r: _httpx.Response(200, json={"statusCode": 0})))
+
+        async def match_list(self, page=1, page_size=20):
+            return {"matchList": []}
+
+        async def detail_stats(self, season_id="recent"):
+            return {"seasonId": "s-9", "historyRatings": [1.1, 0.9], "adr": 73.95}
+
+    monkeypatch.setattr(wanmei_sync, "build_api_from_settings", lambda session: StubAPI())
+
+    task_id = client.post("/api/tasks", json={"type": "wanmei_sync"}).json()["id"]
+    run = client.post(f"/api/tasks/{task_id}/run")
+    assert run.status_code == 200
+    body = client.get(f"/api/tasks/{task_id}").json()
+    assert body["status"] == "success" and body["result"]["season_stats"] is True
+
+    out = client.get("/api/matches/stats/season").json()
+    assert out["season_id"] == "s-9"
+    assert out["data"]["adr"] == 73.95
+    assert out["data"]["historyRatings"] == [1.1, 0.9]

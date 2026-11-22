@@ -17,6 +17,8 @@ from ..models import Match, Task, utcnow
 SYNC_INTERVAL_H = 2
 DEMO_BATCH_HOUR = 3
 DEMO_BATCH_MIN = 30
+WEEKLY_HOUR = 21
+WEEKLY_WEEKDAY = 6  # 周日（python weekday(): Monday=0 ... Sunday=6）
 
 
 def _logged_in(session: Session) -> bool:
@@ -54,6 +56,11 @@ class Scheduler:
             pending = session.exec(select(Match).where(Match.demo_status == "pending_demo")).all()
             if in_window and pending and (last_batch is None or last_batch.date() != now.date()):
                 due.append("demo_analyze_batch")
+            # 周报：周日 21:00 窗口，每周一次
+            last_weekly = self.last_run.get("weekly_report")
+            weekly_window = now.weekday() == WEEKLY_WEEKDAY and now.hour == WEEKLY_HOUR
+            if weekly_window and (last_weekly is None or last_weekly.date() != now.date()):
+                due.append("weekly_report")
         return due
 
     def mark(self, name: str, now: datetime | None = None) -> None:
@@ -114,6 +121,8 @@ async def run_forever(interval_s: int = 60) -> None:
                     _create_and_run("wanmei_sync", {}, priority=3)
                 elif name == "demo_analyze_batch":
                     _create_and_run("demo_analyze_batch", {}, priority=1)
+                elif name == "weekly_report":
+                    _create_and_run("weekly_report", {}, priority=4)
         except Exception:  # noqa: BLE001
             logger.exception("[调度] tick 异常（循环继续）")
         await asyncio.sleep(interval_s)
