@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -147,4 +148,15 @@ class MindVaultClient:
     async def health(self) -> dict[str, Any]:
         resp = await self.request("GET", "/api/health")
         resp.raise_for_status()
+        return resp.json()
+
+    async def capture_video(self, path: str, title: str, preset: str = "raw") -> dict[str, Any]:
+        """上传视频文件到 MindVault /api/capture/videos（≤20MB，{source_hash}_{preset_hash} 寻址）。"""
+        with open(path, "rb") as f:
+            files = {"file": (Path(path).name, f, "video/mp4")}
+            data = {"title": title, "preset": preset}
+            resp = await self.request("POST", "/api/capture/videos", files=files, data=data)
+        if resp.status_code not in (200, 201):
+            raise MindVaultError(f"视频捕获失败：HTTP {resp.status_code} {resp.text[:200]}")
+        logger.info(f"[MindVault] capture_video {Path(path).name} preset={preset}")
         return resp.json()
