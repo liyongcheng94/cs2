@@ -54,6 +54,22 @@ def test_non_secret_key_stored_plain(client):
     assert listed["mv.base_url"] == "http://127.0.0.1:8001"
 
 
+def test_put_masked_secret_does_not_overwrite(client):
+    """
+    Given 设置页把脱敏回显值（****开头）原样提交（历史 bug：掩码覆盖真实密码）
+    When  PUT /api/settings
+    Then  secret 值不被覆盖（保持原明文），其余键正常保存
+    """
+    client.put("/api/settings", json={"mindvault.password": "real-pw-456"})
+    assert client.get("/api/settings/detail").json()["mindvault.password"] == "real-pw-456"
+
+    resp = client.put("/api/settings", json={"mindvault.password": "****56", "mv.base_url": "http://x:1"})
+    assert resp.status_code == 200
+    detail = client.get("/api/settings/detail").json()
+    assert detail["mindvault.password"] == "real-pw-456"  # 掩码不覆盖
+    assert detail["mv.base_url"] == "http://x:1"  # 普通键正常更新
+
+
 def test_player_profile_seeded_on_startup(client):
     """
     Given 首次启动（空库）

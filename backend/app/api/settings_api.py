@@ -20,8 +20,11 @@ def settings_detail(session: SessionDep) -> dict[str, str]:
 
 @router.put("")
 def update_settings(body: dict[str, str], session: SessionDep) -> dict[str, str]:
+    """保存设置。secret 键若提交的是脱敏值（****开头）则跳过——表单回显掩码不视为修改。"""
     for key, value in body.items():
         if value is None:
+            continue
+        if key in settings_service.SECRET_KEYS and str(value).startswith("****"):
             continue
         settings_service.set_value(session, key, str(value))
     return settings_service.get_all_masked(session)
