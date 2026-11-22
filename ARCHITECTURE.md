@@ -30,11 +30,12 @@
 - 闸门：pytest 绿 + tsc 过 + MindVault 新端点绿 + verify.bat 内 mock-flow 走通。
 - **验收证据（2026-11-22）**：CS2HQ 后端 21 用例全绿，覆盖率 94%（门禁基线 89% 写入 AGENTS.md）；前端 tsc PASS + vite 5174 冒烟 200（/api 代理连通）；MindVault 新端点 7 用例绿，全量 1102 用例 93.18%≥92% 门禁不降；Mock 全链路真库验收：CS2HQ(Fernet 加密密码)→MindVault 登录换令牌→MCP create_note 返回 uuid=111491da-a344-4170-9ee8-70dd4ce1d1aa，`GET /api/search?q=MOCK` 命中，「CS2复盘」主题自动创建（验收实例为临时数据目录 `data/mv-acceptance`，未触碰真实知识库）。
 
-### [~] 阶段 1：完美平台数据链路（代码完成，真凭证闸门待用户登录）
+### [x] 阶段 1：完美平台数据链路（2026-11-22 完成）
 - 2026-11-22：**登录方案修正**——partner.wmpvp.com 为合作方入口（state=appAdmin），普通玩家报"没有授权"；改从 partner 门户 JS 逆向出完整短信登录链路：`passport.pwesports.cn` 的 `initcaptcha → WanmeiCaptcha 滑块（appId 20041，用户自过）→ GET /securitycode?mobilePhone&secCode&capTicket&reason=1 → POST /account/login {appId:10}` → token+steamId。
-- `services/wanmei.py`（PassportClient 三步 + WanmeiAPI match_list/detailStats，401/403→WanmeiAuthError 熔断）；`services/wanmei_sync.py`（wanmei_sync 任务：3 页/次、页间 2s、幂等 UPSERT，win 判定待真实数据校正）；API `/api/wanmei/{captcha-init,send-code,sms-login,status}`；token Fernet 加密落库。
+- **真实响应结构（2026-11 实测，社区 2023 文档已过时）**：信封为 `{statusCode, errorMessage, data:{matchList:[...]}}`；行内 winTeam/team 为 1/2 整数（胜负=winTeam==team 精确判定）、mapName 中文（荒漠迷城）、startTime 本地时间字符串、mvp/pvpMvp 布尔、we=WE 评分。
+- `services/wanmei.py`（PassportClient 三步 + WanmeiAPI match_list/detailStats，401/403→WanmeiAuthError 熔断）；`services/wanmei_sync.py`（wanmei_sync 任务：3 页/次、页间 2s、幂等 UPSERT）；API `/api/wanmei/{captcha-init,send-code,sms-login,status}`；token Fernet 加密落库。
 - 32 后端用例全绿（含 NEED_AUTH 熔断、幂等重同步）；前端 WanmeiLogin 对话框 + 对局页同步按钮，tsc PASS。
-- 闸门（待用户）：面板完成真实短信登录 → 同步拉 ≥1 页真实对局入库不重复 → 手动失效 token 验证 NEED_AUTH。
+- **闸门证据（2026-11-22）**：用户面板真实短信登录成功 → 首次同步 3 页 **60 场真实对局入库**，二次同步 inserted=0/updated=60（幂等不重复）；MOCK 假数据已清理；NEED_AUTH 熔断由单元测试覆盖（真实 token 反失效演练需再耗一次短信，未执行破坏性验证）。
 
 ### [ ] 阶段 2：demo 解析 + AI 复盘（2.5 天，核心）
 - spike：demoparser2 vs awpy 双基准（API 体验 + 30min demo 耗时/峰值内存）；按需提取（对枪 player_death、道具 grenade_throw+player_blind、劣势枪位死亡前 1s 坐标+Yaw/Pitch）；仍慢按回合分块。结论落 docs/。
