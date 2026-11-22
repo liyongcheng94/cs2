@@ -21,6 +21,7 @@ import {
   Typography,
 } from "antd";
 import { apiGet, apiPost, apiPut } from "./api/client";
+import { WanmeiLogin } from "./components/WanmeiLogin";
 import type { MatchDetail, MatchSummary, MockFlowResult, Profile, TaskItem } from "./types";
 
 const { Header, Content } = Layout;
@@ -117,6 +118,24 @@ function OverviewPage() {
 // ---------- 对局 ----------
 function MatchesPage() {
   const [detailId, setDetailId] = useState<number | null>(null);
+  const qc = useQueryClient();
+  const sync = useMutation({
+    mutationFn: async () => {
+      const t = await apiPost<{ id: number }>("/tasks", { type: "wanmei_sync" });
+      return apiPost<{ status: string; error: string | null }>(`/tasks/${t.id}/run`);
+    },
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["matches"] });
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      if (res.status === "NEED_AUTH") {
+        message.error("完美平台 token 失效（已熔断），请到设置页重新短信登录");
+      } else if (res.status !== "success") {
+        message.error(`同步失败：${res.error ?? res.status}`);
+      } else {
+        message.success("同步完成");
+      }
+    },
+  });
   const matches = useQuery({
     queryKey: ["matches"],
     queryFn: () => apiGet<MatchSummary[]>("/matches"),
@@ -164,6 +183,18 @@ function MatchesPage() {
 
   return (
     <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+      <Space>
+        <Button
+          type="primary"
+          loading={sync.isPending}
+          onClick={() => sync.mutate()}
+        >
+          从完美平台同步
+        </Button>
+        <span style={{ color: "#999", fontSize: 12 }}>
+          拉 3 页 / 次，限速 2s；token 失效会熔断提示重登
+        </span>
+      </Space>
       <Table
         rowKey="id"
         loading={matches.isLoading}
@@ -301,41 +332,37 @@ function SettingsPage() {
   }
 
   return (
-    <Card title="凭证与连接" style={{ maxWidth: 640 }}>
-      <Form form={form} layout="vertical" onFinish={(v) => save.mutate(v)}>
-        <Form.Item
-          name="mv.base_url"
-          label="MindVault 地址"
-          tooltip="dev 模式默认 http://127.0.0.1:8001；走公网隧道时改隧道 URL"
-        >
-          <Input placeholder="http://127.0.0.1:8001" />
-        </Form.Item>
-        <Form.Item
-          name="mindvault.password"
-          label="MindVault 访问密码"
-          tooltip="未设密码可留空；Fernet 加密落库"
-        >
-          <Input.Password placeholder="留空表示无密码" />
-        </Form.Item>
-        <Form.Item
-          name="wanmei.access_token"
-          label="完美平台 access_token"
-          tooltip="partner.wmpvp.com 登录后从 cookie 取；失效时任务会熔断为 NEED_AUTH"
-        >
-          <Input.Password placeholder="粘贴即存，即时生效，无需重启" />
-        </Form.Item>
-        <Form.Item
-          name="bili.sessdata"
-          label="B站 SESSDATA"
-          tooltip="登录 B 站后从浏览器 cookie 复制；用于字幕抓取"
-        >
-          <Input.Password placeholder="粘贴即存" />
-        </Form.Item>
-        <Button type="primary" htmlType="submit" loading={save.isPending}>
-          保存
-        </Button>
-      </Form>
-    </Card>
+    <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+      <Card title="凭证与连接" style={{ maxWidth: 640 }}>
+        <Form form={form} layout="vertical" onFinish={(v) => save.mutate(v)}>
+          <Form.Item
+            name="mv.base_url"
+            label="MindVault 地址"
+            tooltip="dev 模式默认 http://127.0.0.1:8001；走公网隧道时改隧道 URL"
+          >
+            <Input placeholder="http://127.0.0.1:8001" />
+          </Form.Item>
+          <Form.Item
+            name="mindvault.password"
+            label="MindVault 访问密码"
+            tooltip="未设密码可留空；Fernet 加密落库"
+          >
+            <Input.Password placeholder="留空表示无密码" />
+          </Form.Item>
+          <Form.Item
+            name="bili.sessdata"
+            label="B站 SESSDATA"
+            tooltip="登录 B 站后从浏览器 cookie 复制；用于字幕抓取"
+          >
+            <Input.Password placeholder="粘贴即存" />
+          </Form.Item>
+          <Button type="primary" htmlType="submit" loading={save.isPending}>
+            保存
+          </Button>
+        </Form>
+      </Card>
+      <WanmeiLogin />
+    </Space>
   );
 }
 
