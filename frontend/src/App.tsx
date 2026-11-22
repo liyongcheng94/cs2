@@ -119,10 +119,10 @@ function OverviewPage() {
 function MatchesPage() {
   const [detailId, setDetailId] = useState<number | null>(null);
   const qc = useQueryClient();
-  const sync = useMutation({
-    mutationFn: async () => {
-      const t = await apiPost<{ id: number }>("/tasks", { type: "wanmei_sync" });
-      return apiPost<{ status: string; error: string | null }>(`/tasks/${t.id}/run`);
+  const runTask = useMutation({
+    mutationFn: async (req: { type: string; matchId?: string }) => {
+      const t = await apiPost<{ id: number }>("/tasks", req.matchId ? { type: req.type, payload: { match_id: req.matchId } } : { type: req.type });
+      return apiPost<{ status: string; error: string | null; result: Record<string, unknown> | null }>(`/tasks/${t.id}/run`);
     },
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["matches"] });
@@ -130,12 +130,14 @@ function MatchesPage() {
       if (res.status === "NEED_AUTH") {
         message.error("完美平台 token 失效（已熔断），请到设置页重新短信登录");
       } else if (res.status !== "success") {
-        message.error(`同步失败：${res.error ?? res.status}`);
+        message.error(`失败：${res.error ?? res.status}`);
       } else {
-        message.success("同步完成");
+        message.success("完成");
       }
     },
   });
+  const sync = () => runTask.mutate({ type: "wanmei_sync" });
+  const analyze = (matchId: string) => runTask.mutate({ type: "demo_analyze", matchId });
   const matches = useQuery({
     queryKey: ["matches"],
     queryFn: () => apiGet<MatchSummary[]>("/matches"),
@@ -176,7 +178,10 @@ function MatchesPage() {
       title: "操作",
       key: "action",
       render: (_: unknown, r: MatchSummary) => (
-        <a onClick={() => setDetailId(r.id)}>详情</a>
+        <Space>
+          <a onClick={() => setDetailId(r.id)}>详情</a>
+          <a onClick={() => analyze(r.match_id)}>分析demo</a>
+        </Space>
       ),
     },
   ];
@@ -186,8 +191,8 @@ function MatchesPage() {
       <Space>
         <Button
           type="primary"
-          loading={sync.isPending}
-          onClick={() => sync.mutate()}
+          loading={runTask.isPending}
+          onClick={sync}
         >
           从完美平台同步
         </Button>
