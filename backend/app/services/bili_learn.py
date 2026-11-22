@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import time
 from typing import Callable
@@ -55,7 +56,7 @@ async def bili_learn_handler(task: Task, session_factory_fn: Callable[[], Sessio
     if bvid:
         targets = [{"bvid": bvid}]
     elif keyword:
-        targets = await search_videos(keyword, sess, page=1)[:5]  # 每任务最多 5 条，限速在下方
+        targets = (await search_videos(keyword, sess, page=1))[:5]  # 每任务最多 5 条，限速在下方
         await asyncio.sleep(1)
     else:
         raise ValueError("payload 需 bvid 或 keyword")

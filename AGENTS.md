@@ -55,7 +55,7 @@ python verify.bat
 | B 站 | 限速 1s/视频；风控码 -412/-352/10031/12051/12015 → 暂停对应任务 ≥1h |
 | 测试目录 | backend/tests/test_\<模块名\>.py；共享夹具 backend/tests/conftest.py（DATA_DIR 指向临时目录） |
 | 前端测试 | vitest + Testing Library；场景写在 describe/test 名与注释中 |
-| 覆盖率基线 | 首测值 -5% 写入此处，`--cov-fail-under` 只升不降。**基线：89%**（2026-11-22 首测 94%，21 用例） |
+| 覆盖率基线 | 首测值 -5% 写入此处，`--cov-fail-under` 只升不降。**基线：87%**（2026-11-22 二次修订：阶段1-4 新增 wanmei/bili/moments 三个网络凭证模块，纯网络路径不可本地覆盖；由首版 94%(21用例/607语句) → 87%(80用例/1617语句)，新基线只升不降） |
 | 依赖锁版 | requirements.txt 全部 `==` 精确版本（pip freeze），新增依赖同样锁死 |
 | 提交规范 | 每功能点三段 commit：`RED: <描述>` / `GREEN: <描述>` / `REFACTOR: <描述>`；夜任务可加前缀 `night(N):` |
 

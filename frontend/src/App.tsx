@@ -361,6 +361,20 @@ function SettingsPage() {
           >
             <Input.Password placeholder="粘贴即存" />
           </Form.Item>
+          <Form.Item
+            name="ai.api_key"
+            label="AI API Key（DeepSeek）"
+            tooltip="复盘总结/道具卡抽取用；MindVault 设置页同一 Key 可复用"
+          >
+            <Input.Password placeholder="sk-... 粘贴即存" />
+          </Form.Item>
+          <Form.Item
+            name="moments.dir"
+            label="完美时刻导出目录"
+            tooltip="完美客户端导出时刻 mp4 的文件夹；保存后点「任务」页执行 moments_sync 推送"
+          >
+            <Input placeholder="例如 D:\PerfectWorld\moments" />
+          </Form.Item>
           <Button type="primary" htmlType="submit" loading={save.isPending}>
             保存
           </Button>

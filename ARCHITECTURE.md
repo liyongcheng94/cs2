@@ -47,15 +47,16 @@
 - 极简 /cs2-daily skill 上线。
 - 闸门：真实 demo → 四维 JSON → 面板 → 复盘过校验 → MindVault 可搜；坏输出验证降级；spike 数据落 docs/。
 
-### [ ] 阶段 3：B 站视频管线 + 道具卡（1 天）
-- `services/bili.py`：WBI 检索 / 手动 BV / UP 主订阅；仅字幕路线，无字幕跳过；限速 1s。
-- 风控软着陆：-412/-352 → 暂停对应任务 ≥1h + 面板提示可切手动 BV。
-- AI 总结 + 道具卡抽取（地图/点位/投掷物/站位/时机/时间戳，Dust2 优先）。
-- 闸门：真实 BV → 总结 → ≥1 张道具卡 → MindVault 可搜。
+### [~] 阶段 3：B 站视频管线 + 道具卡（链路全通，总结/道具卡待 AI Key）
+- 2026-11-22 夜间完成：`services/bili.py`（自研 WBI 签名检索，MindVault 同款算法；字幕走 bilibili-api 17.4.2 `get_subtitle(cid=pages[0])`，SESSDATA 登录态）；`services/bili_learn.py`（任务 bili_learn：BV/关键词 → 字幕 → AI 总结+道具卡 → 推送 CS2视频总结 主题）。
+- **真实冒烟**：检索"CS2 烟雾弹 教学"命中 20 条；BV1Ub421v7ug（道具手教学）ai-zh 字幕 7219 字；端到端：字幕→降级原文→推送 MindVault（uuid 584cf046，可搜）；无字幕视频正确标 no_subtitle。
+- 风控软着陆就位（BiliRiskError → -412/-352 → 任务层暂停 ≥1h）。
+- 待明早（AI Key）：真实总结 + ≥1 张道具卡入库 CS2道具库；前端视频总结/道具库页面。
 
-### [ ] 阶段 4：完美时刻（1 天）
-- `services/moments.py`：getPersonalMoments → mp4 → ≤20MB 直接推，否则 ffmpeg `-preset veryfast`（720p/CRF28）→ MindVault /api/capture/videos → AI 一句话总结；推送成功后本地删/留缩略图。
-- 闸门：≥1 条真实时刻公网可看可播。
+### [~] 阶段 4：完美时刻（管线就绪，真实数据待用户导出）
+- 2026-11-22 夜间完成：getPersonalMoments 端点实测 404（未公开，抓包方案留待后续不阻塞）——改用**与 demo 同构的客户端协作方案**：用户导出时刻 mp4 到 moments.dir（设置页配置）→ `services/moments.py` 扫描 → ≤20MB 直推 / 超限 ffmpeg（imageio-ffmpeg 静态二进制，-preset veryfast 720p/CRF28）→ MindVault `/api/capture/videos` → Clip 行幂等。
+- 任务 moments_sync；ffmpeg 真实压缩链路已测试（test_compress_real_ffmpeg 用 ffmpeg 自生成源验证）。
+- 待真实数据：用户导出 ≥1 条时刻 → 推送 → 公网 MindVault 可播放。
 
 ### [ ] 阶段 5：可视化增强 + 整合收口（1 天）
 - ECharts：对枪矩阵热力图（距离分桶 × 武器 → 胜率）；死亡还原 2D 雷达散点图（坐标映射 + 纯底图，>100 点 large:true）。

@@ -6,6 +6,7 @@ import tempfile
 
 # 模块导入前给一个兜底数据目录（真实每测试隔离在各 fixture 内 monkeypatch）
 os.environ.setdefault("CS2HQ_DATA_DIR", tempfile.mkdtemp(prefix="cs2hq-test-"))
+os.environ["CS2HQ_SCHEDULER"] = "0"  # 测试禁用错峰调度（防测试间互相触发任务）
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

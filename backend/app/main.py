@@ -1,6 +1,7 @@
-"""CS2HQ FastAPI 入口：lifespan 建表 + 画像种子 + loguru 落盘。"""
+"""CS2HQ FastAPI 入口：lifespan 建表 + 画像种子 + loguru 落盘 + 错峰调度。"""
 from __future__ import annotations
 
+import asyncio
 import sys
 from contextlib import asynccontextmanager
 
@@ -45,7 +46,17 @@ async def lifespan(app: FastAPI):
     create_db_and_tables()
     seed_player_profile()
     logger.info(f"[启动] CS2HQ v{APP_VERSION} 就绪 data={get_log_dir().parent}")
+    scheduler_task = None
+    import os
+
+    if os.environ.get("CS2HQ_SCHEDULER", "1") != "0":
+        from .services.scheduler import run_forever
+
+        scheduler_task = asyncio.create_task(run_forever(interval_s=60))
+        logger.info("[启动] 错峰调度器已启动（同步每2h/demo凌晨批量）")
     yield
+    if scheduler_task:
+        scheduler_task.cancel()
 
 
 def create_app() -> FastAPI:
