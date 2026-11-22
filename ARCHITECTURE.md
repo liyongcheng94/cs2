@@ -19,7 +19,7 @@
 
 ## 实施计划（阶段闸门）
 
-### [ ] 阶段 0：基座 + MindVault 视频端点 + Mock 全链路（1 天）
+### [x] 阶段 0：基座 + MindVault 视频端点 + Mock 全链路（2026-11-22 完成）
 - backend/（FastAPI+SQLModel+SQLite）+ frontend/（React+antd+Vite）+ AGENTS.md + git 分支 feature/phase-0-base + loguru + 依赖 `==` 锁版。
 - 表：matches / match_stats / demo_analyses(JSON 四维) / clips / bili_videos / grenade_cards / reports / player_profile / settings / tasks(含 priority)。数据访问收敛 services 层；迁 PostgreSQL 预案见 AGENTS.md。
 - 凭证 Fernet 加密存 settings；secret.key 环境变量 + .gitignore。
@@ -28,6 +28,7 @@
 - Mock 全链路：`POST /api/test/mock-flow` 假数据跑通 后端→面板→MCP→MindVault。
 - 前端 React Query 轮询 `GET /api/tasks`（5s）。
 - 闸门：pytest 绿 + tsc 过 + MindVault 新端点绿 + verify.bat 内 mock-flow 走通。
+- **验收证据（2026-11-22）**：CS2HQ 后端 21 用例全绿，覆盖率 94%（门禁基线 89% 写入 AGENTS.md）；前端 tsc PASS + vite 5174 冒烟 200（/api 代理连通）；MindVault 新端点 7 用例绿，全量 1102 用例 93.18%≥92% 门禁不降；Mock 全链路真库验收：CS2HQ(Fernet 加密密码)→MindVault 登录换令牌→MCP create_note 返回 uuid=111491da-a344-4170-9ee8-70dd4ce1d1aa，`GET /api/search?q=MOCK` 命中，「CS2复盘」主题自动创建（验收实例为临时数据目录 `data/mv-acceptance`，未触碰真实知识库）。
 
 ### [ ] 阶段 1：完美平台数据链路（1 天）
 - `services/wanmei.py`：httpx；match/list 分页幂等 UPSERT；detailStats 存 match_stats；限速 ≥2s；loguru trace（matchId 字段）。
