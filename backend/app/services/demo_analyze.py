@@ -78,8 +78,12 @@ async def demo_analyze_handler(task: Task, session_factory_fn: Callable[[], Sess
     _set_demo_status(match_id, "analyzed")
     logger.info(f"[demo解析] matchId={match_id} 耗时={meta.get('cost_s')}s 峰值内存={meta.get('peak_mem_mb')}MB parser={meta.get('parser')}")
 
-    # 3) 复盘（AI 缺失自动降级纯文本）
-    report = await build_report(analysis, ai=None)
+    # 3) 复盘（AI 桥；provider 未配好自动降级纯文本）
+    with session_factory_fn() as session:
+        from .ai_client import build_ai_client
+
+        ai = build_ai_client(session)
+    report = await build_report(analysis, ai=ai)
 
     # 4) 推送（幂等；MindVault 挂了只降级）
     pushed = await push_report(
