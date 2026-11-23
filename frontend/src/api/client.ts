@@ -35,3 +35,22 @@ export async function apiDelete<T>(path: string): Promise<T> {
   if (!resp.ok) throw new Error(`DELETE ${path}: HTTP ${resp.status}`);
   return resp.json();
 }
+
+export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
+  const resp = await fetch(`${API}${path}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) throw new Error(`PATCH ${path}: HTTP ${resp.status}`);
+  return resp.json();
+}
+
+// multipart 文件上传（道具卡贴图）：不设 Content-Type（浏览器自动带 boundary）
+export async function apiUpload<T>(path: string, files: File[]): Promise<T> {
+  const form = new FormData();
+  for (const f of files) form.append("files", f);
+  const resp = await fetch(`${API}${path}`, { method: "POST", body: form });
+  if (!resp.ok) throw new Error(`POST ${path}: HTTP ${resp.status}`);
+  return resp.json();
+}

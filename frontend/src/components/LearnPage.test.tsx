@@ -8,17 +8,23 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import { LearnPage, tsToSeconds } from "./LearnPage";
+import { inferZone, LearnPage, tsToSeconds, ZONES } from "./LearnPage";
 
 // mock api client（组件经 apiGet/apiPost 取数）
 vi.mock("../api/client", () => ({
   apiGet: vi.fn(),
   apiPost: vi.fn(),
+  apiPatch: vi.fn(),
+  apiUpload: vi.fn(),
+  apiDelete: vi.fn(),
 }));
 
-import { apiGet, apiPost } from "../api/client";
+import { apiGet, apiPatch, apiPost, apiUpload, apiDelete } from "../api/client";
 const apiGetMock = vi.mocked(apiGet);
 const apiPostMock = vi.mocked(apiPost);
+const apiPatchMock = vi.mocked(apiPatch);
+const apiUploadMock = vi.mocked(apiUpload);
+const apiDeleteMock = vi.mocked(apiDelete);
 
 // antd 在 jsdom 里需要 matchMedia（responsiveObserver）
 beforeAll(() => {
@@ -80,6 +86,8 @@ const GRENADES = [
     video_ts: "未提供",
     bvid: "BV1wallcardA",
     content_md: "跳时切狙保留移速。",
+    zone: "中路",
+    favorited: false,
   },
   {
     id: 2,
@@ -91,6 +99,8 @@ const GRENADES = [
     video_ts: "03:24",
     bvid: "BV1wallcardA",
     content_md: "烧香蕉道延缓进攻。",
+    zone: null,
+    favorited: false,
   },
 ];
 
@@ -102,6 +112,9 @@ beforeEach(() => {
     return Promise.resolve([]);
   });
   apiPostMock.mockResolvedValue({ id: 1, status: "success" } as never);
+  apiPatchMock.mockResolvedValue({ id: 1, favorited: true } as never);
+  apiUploadMock.mockResolvedValue([] as never);
+  apiDeleteMock.mockResolvedValue({ deleted: 1 } as never);
 });
 
 describe("LearnPage L1 视频卡片墙", () => {
@@ -233,5 +246,65 @@ describe("LearnPage 学习入口", () => {
         payload: { bvid: "https://b23.tv/abc123" },
       }),
     );
+  });
+});
+
+describe("LearnPage v2 分区 + 收藏（grill-me 八问共识）", () => {
+  test("inferZone 正则兜底：A大→A区 / B小→B区 / 拱门→中路 / 出生→出生点；显式 zone 优先", () => {
+    expect(inferZone({ zone: null, point: "A大" })).toBe("A区");
+    expect(inferZone({ zone: null, point: "B小" })).toBe("B区");
+    expect(inferZone({ zone: null, point: "拱门" })).toBe("中路");
+    expect(inferZone({ zone: null, point: "T出生点" })).toBe("出生点");
+    expect(inferZone({ zone: "A区", point: "B小" })).toBe("A区"); // 显式 zone 优先于正则
+    expect(inferZone({ zone: "外侧分区", point: "A大" })).toBe("A区"); // 非法 zone 回退正则
+  });
+
+  test("ZONES 四分区 + 全部", () => {
+    expect([...ZONES]).toEqual(["全部", "A区", "B区", "中路", "出生点"]);
+  });
+
+  test("道具卡渲染 zone Tag 与分区二级 Tab，B区过滤只留 B 区卡", async () => {
+    renderPage();
+    await screen.findByText("炼狱小镇 · 香蕉道");
+    // 二级 Tab 存在
+    expect(screen.getByTestId("zone-tabs")).toBeTruthy();
+    // zone=null 的香蕉道卡正则兜底 → B区 Tag；zone=中路 的 VIP 卡 → 中路 Tag
+    expect(screen.getAllByText("B区").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("中路").length).toBeGreaterThan(0);
+    // 点 B区 Tab → VIP（中路）卡消失，香蕉道保留
+    fireEvent.click(screen.getByRole("button", { name: "B区" }));
+    await waitFor(() => {
+      expect(screen.queryByText("VIP（T方10号位）")).toBeNull();
+    });
+    expect(screen.getByText("炼狱小镇 · 香蕉道")).toBeTruthy();
+  });
+
+  test("点★收藏调 PATCH favorited=true，再点取消", async () => {
+    renderPage();
+    await screen.findByText("炼狱小镇 · 香蕉道");
+    const star1 = screen.getByRole("button", { name: "收藏1" });
+    fireEvent.click(star1);
+    await waitFor(() => {
+      expect(apiPatchMock).toHaveBeenCalledWith("/bili/grenades/1/favorite", { favorited: true });
+    });
+    // 再次点击 → 取消收藏（当前 favorited=false 状态下再点仍是 true；invalidate 后重取）
+    fireEvent.click(screen.getByRole("button", { name: "收藏1" }));
+    await waitFor(() => {
+      expect(apiPatchMock).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  test("贴图区：GET images 返回图时渲染预览（URL 直出）", async () => {
+    apiGetMock.mockImplementation((path: string) => {
+      if (path === "/bili/videos") return Promise.resolve(VIDEOS);
+      if (path === "/bili/grenades") return Promise.resolve(GRENADES);
+      if (path === "/bili/grenades/2/images")
+        return Promise.resolve([{ id: 9, filename: "a.png", url: "/api/bili/uploads/2/a.png" }]);
+      return Promise.resolve([]);
+    });
+    renderPage();
+    await screen.findByText("炼狱小镇 · 香蕉道");
+    const imgs = await screen.findByAltText("a.png");
+    expect((imgs as HTMLImageElement).src).toContain("/api/bili/uploads/2/a.png");
   });
 });
