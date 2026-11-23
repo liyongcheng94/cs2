@@ -41,6 +41,8 @@ _MIGRATIONS = [
     "ALTER TABLE grenadecard ADD COLUMN favorited BOOLEAN DEFAULT 0",
     # AI 教练图片对话（2026-11-23 OCR 间接路线）：消息带图 id 列
     "ALTER TABLE chatmessage ADD COLUMN image_ids VARCHAR",
+    # DeepSeek 分享对话导入幂等键
+    "ALTER TABLE chatsession ADD COLUMN import_key VARCHAR",
 ]
 
 

@@ -181,6 +181,7 @@ class ChatSession(SQLModel, table=True):
     """AI 教练对话会话（多轮，历史持久化）。"""
     id: int | None = Field(default=None, primary_key=True)
     title: str = "新对话"
+    import_key: str | None = Field(default=None, index=True)  # 外部导入幂等键（如 DeepSeek 分享 id）
     created_at: datetime = Field(default_factory=utcnow, sa_type=NAIVE_DT)
 
 

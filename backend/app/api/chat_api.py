@@ -1,6 +1,7 @@
 """AI 教练对话 API：会话 CRUD + 一轮对话 + 流式（SSE）+ 图片上传（OCR 间接路线）。"""
 from __future__ import annotations
 
+import json
 import uuid
 from pathlib import Path
 
@@ -10,6 +11,8 @@ from pydantic import BaseModel
 
 from ..config import get_data_dir
 from ..database import SessionDep
+from ..models import ChatSession
+from sqlmodel import select
 from ..services.chat_coach import chat, chat_stream, delete_session, list_messages, list_sessions
 from ..services.ocr import ocr_image
 
@@ -79,6 +82,86 @@ def get_upload(image_id: int, filename: str) -> FileResponse:
         raise HTTPException(status_code=404, detail="图片不存在")
     mime = _EXT_MIME.get(target.suffix.lower(), "application/octet-stream")
     return FileResponse(target, media_type=mime)
+
+
+class ImportMessage(BaseModel):
+    role: str
+    content: str
+    images: list[str] | None = None  # 图片 URL（导入时下载存 ChatImage）
+
+
+class ImportBody(BaseModel):
+    title: str
+    share_key: str  # 幂等键（DeepSeek 分享 id）
+    messages: list[ImportMessage]
+
+
+def _download_image(url: str, timeout: float = 30.0, headers: dict | None = None) -> bytes | None:
+    """下载图片字节；失败返回 None（导入不阻断）。"""
+    try:
+        import httpx
+
+        resp = httpx.get(url, timeout=timeout, headers=headers or {}, follow_redirects=True)
+        if resp.status_code != 200:
+            return None
+        return resp.content
+    except Exception:
+        return None
+
+
+@router.post("/import")
+async def import_conversation(body: ImportBody, session: SessionDep) -> dict:
+    """导入外部对话（DeepSeek 分享页等）：新建会话 + 逐条落消息；图片下载绑定 image_ids；同 share_key 幂等。"""
+    from ..models import ChatImage, ChatMessage
+
+    # 幂等：同 share_key 已导入过 → 直接返回既有会话
+    existing = session.exec(
+        select(ChatSession).where(ChatSession.import_key == body.share_key)
+    ).first()
+    if existing is not None:
+        return {"session_id": existing.id, "imported": 0, "images_downloaded": 0}
+
+    cs = ChatSession(title=body.title[:40] or "导入对话", import_key=body.share_key)
+    session.add(cs)
+    session.commit()
+    session.refresh(cs)
+
+    imported = 0
+    downloaded = 0
+    for m in body.messages:
+        image_ids: list[int] = []
+        for url in m.images or []:
+            data = _download_image(url, headers={"User-Agent": "Mozilla/5.0 (CS2HQ import)"})
+            if data is None:
+                continue
+            ctype = "image/webp" if url.lower().endswith(".webp") or "webp" in url else "image/png"
+            if ctype not in _ALLOWED_MIME:
+                ctype = "image/png"
+            ext = ".webp" if ctype == "image/webp" else ".png"
+            img = ChatImage(filename="", session_id=cs.id)
+            session.add(img)
+            session.commit()
+            session.refresh(img)
+            filename = f"{uuid.uuid4().hex}{ext}"
+            (_chat_uploads_dir(img.id) / filename).write_bytes(data)
+            img.filename = filename
+            img.ocr_text = ocr_image(_chat_uploads_dir(img.id) / filename)
+            session.add(img)
+            session.commit()
+            session.refresh(img)
+            image_ids.append(img.id)
+            downloaded += 1
+        session.add(
+            ChatMessage(
+                session_id=cs.id,
+                role=m.role if m.role in ("user", "assistant") else "user",
+                content=m.content,
+                image_ids=json.dumps(image_ids) if image_ids else None,
+            )
+        )
+        imported += 1
+    session.commit()
+    return {"session_id": cs.id, "imported": imported, "images_downloaded": downloaded}
 
 
 @router.post("/sessions")
