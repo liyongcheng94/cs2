@@ -19,7 +19,13 @@ export interface FourDimAnalysisShape {
   match_id: string;
   deaths?: { events?: Record<string, unknown>[]; disadvantaged_rate?: number | null };
   economy?: { buy_decisions?: Record<string, unknown>[]; first_kill_conversion?: number | null };
-  utility?: { throws?: Record<string, unknown>[]; blind_median_s?: number | null; waste_rate?: number | null };
+  utility?: {
+    throws?: Record<string, unknown>[];
+    blind_median_s?: number | null;
+    waste_rate?: number | null;
+    players?: { player_id: string; nick_name: string; smoke: number; flash: number; molotov: number; he: number; flash_enemies: number; flash_teammates: number; util_dmg: number; spend: number }[];
+    server_ratings?: { players: Record<string, Record<string, number>>; averages: Record<string, number> } | null;
+  };
   duels?: { by_weapon_distance?: { distance: string; weapon: string; kills?: number; deaths?: number; win_rate?: number | null }[] };
   meta?: { parser?: string; cost_s?: number | null; peak_mem_mb?: number | null };
 }

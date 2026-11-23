@@ -1,10 +1,11 @@
 // 对局详情 Modal（完美平台风格）：PW 式头部 + 综合数据/对枪矩阵/死亡雷达/AI 复盘 四 Tab
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Modal, Spin, Table, Tabs, Tag, Typography } from "antd";
 import { marked } from "marked";
 import { apiGet } from "../api/client";
-import type { MatchDetail } from "../types";
+import * as echarts from "echarts";
+import type { FourDimAnalysisShape, MatchDetail } from "../types";
 import { DeathScatter } from "./DeathScatter";
 import { DuelHeatmap } from "./DuelHeatmap";
 
@@ -146,6 +147,8 @@ function Inner({ detail }: { detail: MatchDetail }) {
         items={[
           { key: "overall", label: "综合数据", children: <OverallTab detail={detail} /> },
           { key: "duels", label: "对枪矩阵", children: <DuelHeatmap analysis={detail.analysis} /> },
+          { key: "util", label: "道具分析", children: <UtilityTab detail={detail} /> },
+          { key: "ratings", label: "服务器评价", children: <RatingsTab detail={detail} /> },
           { key: "radar", label: "死亡雷达", children: <DeathScatter analysis={detail.analysis} mapEn={mapEn} /> },
           { key: "ai", label: "AI 复盘", children: <ReviewTab matchId={m.id} /> },
         ]}
@@ -175,5 +178,125 @@ export function MatchDetailModal({
     >
       {detail ? <Inner detail={detail} /> : null}
     </Modal>
+  );
+}
+
+// ---------- 道具分析（PW 风格堆叠条：烟/闪/火/雷 + 花费） ----------
+function UtilityTab({ detail }: { detail: MatchDetail & { analysis: FourDimAnalysisShape | null } }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<echarts.ECharts | null>(null);
+  const players = (detail.analysis?.utility?.players ?? []) as Record<string, any>[];
+
+  useEffect(() => {
+    if (!ref.current || !players.length) return;
+    if (!chartRef.current) chartRef.current = echarts.init(ref.current);
+    const chart = chartRef.current;
+    const names = players.map((p) => p.nick_name || p.player_id);
+    chart.setOption({
+      title: { text: "道具投掷统计（烟/闪/火/雷）", left: "center", textStyle: { fontSize: 13, color: "#ccc" } },
+      tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+      legend: { data: ["烟雾弹", "闪光弹", "燃烧瓶", "手雷"], bottom: 0 },
+      grid: { left: 110, right: 60, top: 30, bottom: 40 },
+      xAxis: { type: "value" },
+      yAxis: { type: "category", data: names, axisLabel: { width: 90, overflow: "truncate" } },
+      series: [
+        { name: "烟雾弹", type: "bar", stack: "t", data: players.map((p) => p.smoke), itemStyle: { color: "#3b82f6" } },
+        { name: "闪光弹", type: "bar", stack: "t", data: players.map((p) => p.flash), itemStyle: { color: "#f59e0b" } },
+        { name: "燃烧瓶", type: "bar", stack: "t", data: players.map((p) => p.molotov), itemStyle: { color: "#ef4444" } },
+        { name: "手雷", type: "bar", stack: "t", data: players.map((p) => p.he), itemStyle: { color: "#22c55e" } },
+      ],
+    });
+    const onResize = () => chart.resize();
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      chart.dispose();
+      chartRef.current = null;
+    };
+  }, [players, detail.match.player_id]);
+
+  if (!players.length) return <Text type="secondary">道具统计需 demo 解析（分析后生成）</Text>;
+
+  return (
+    <div>
+      <div ref={ref} style={{ width: "100%", height: Math.max(280, players.length * 26 + 80) }} />
+      <Table
+        rowKey="player_id"
+        size="small"
+        pagination={false}
+        style={{ marginTop: 8 }}
+        dataSource={players}
+        rowClassName={(r) => (String(r.player_id) === detail.match.player_id ? "my-row" : "")}
+        columns={[
+          { title: "玩家", dataIndex: "nickName", ellipsis: true },
+          { title: "烟", dataIndex: "smoke", width: 50 },
+          { title: "闪", dataIndex: "flash", width: 50 },
+          { title: "火", dataIndex: "molotov", width: 50 },
+          { title: "雷", dataIndex: "he", width: 50 },
+          { title: "致盲敌方", dataIndex: "flash_enemies", width: 80 },
+          { title: "致盲队友", dataIndex: "flash_teammates", width: 80 },
+          { title: "道具伤害", dataIndex: "util_dmg", width: 80 },
+          { title: "花费", dataIndex: "spend", width: 70 },
+        ]}
+      />
+    </div>
+  );
+}
+
+// ---------- 服务器评价（六维能力：我 vs 本场均值 + 规则综合评价） ----------
+function RatingsTab({ detail }: { detail: MatchDetail & { analysis: FourDimAnalysisShape | null } }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<echarts.ECharts | null>(null);
+  const ratings = detail.analysis?.utility?.server_ratings;
+  const myId = detail.match.player_id ?? "";
+
+  useEffect(() => {
+    if (!ref.current || !ratings || !ratings.players || !myId) return;
+    if (!chartRef.current) chartRef.current = echarts.init(ref.current);
+    const chart = chartRef.current;
+    const dims = Object.keys(ratings.averages);
+    const mine = dims.map((d) => ratings.players[myId]?.[d] ?? 0);
+    const avg = dims.map((d) => ratings.averages[d] ?? 0);
+    chart.setOption({
+      title: { text: "六维能力（本场内相对评分 0-100）", left: "center", textStyle: { fontSize: 13, color: "#ccc" } },
+      tooltip: { trigger: "axis" },
+      legend: { data: ["我的评分", "本场均值"], bottom: 0 },
+      grid: { left: 50, right: 20, top: 40, bottom: 50 },
+      xAxis: { type: "category", data: dims },
+      yAxis: { type: "value", max: 100 },
+      series: [
+        { name: "我的评分", type: "bar", data: mine, itemStyle: { color: "#22d3ee" }, label: { show: true, position: "top", color: "#fff" } },
+        { name: "本场均值", type: "bar", data: avg, itemStyle: { color: "#8b5cf6" }, label: { show: true, position: "top", color: "#fff" } },
+      ],
+    });
+    const onResize = () => chart.resize();
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      chart.dispose();
+      chartRef.current = null;
+    };
+  }, [ratings, myId]);
+
+  if (!ratings || !ratings.players || !myId || !ratings.players[myId]) {
+    return <Text type="secondary">六维评分需 demo 解析 + 全场数据（两者就绪后生成）</Text>;
+  }
+
+  const mine = ratings.players[myId];
+  const below = Object.entries(mine).filter(([d, v]) => v < (ratings.averages[d] ?? 0) - 2).map(([d]) => d);
+  const above = Object.entries(mine).filter(([d, v]) => v > (ratings.averages[d] ?? 0) + 2).map(([d]) => d);
+  const verdict =
+    below.length > 0
+      ? `本场你的 ${below.join("、")} 低于本场其他玩家均值，建议专项练习后重新匹配；${above.length ? `你的 ${above.join("、")} 高于均值，保持即可。` : ""}`
+      : `本场你所有维度均不低于场均值，${above.length ? `其中 ${above.join("、")} 领先明显，保持状态。` : "整体表现均衡。"}`;
+
+  return (
+    <div>
+      <div ref={ref} style={{ width: "100%", height: 320 }} />
+      <div style={{ marginTop: 12 }}>
+        <Text strong>综合评价：</Text>
+        <div style={{ color: "#ccc", fontSize: 13, marginTop: 4 }}>{verdict}</div>
+      </div>
+    </div>
   );
 }
