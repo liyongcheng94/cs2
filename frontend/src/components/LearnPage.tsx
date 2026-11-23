@@ -14,18 +14,20 @@
  * - Given 点★ When 点击 Then PATCH favorited 且收藏置顶
  * - Given 卡片贴图 When 上传 Then apiUpload 后预览可见
  */
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
   Card,
   Col,
   Empty,
+  Form,
   Image,
   Input,
   message,
   Modal,
   Row,
+  Segmented,
   Space,
   Spin,
   Tag,
@@ -121,6 +123,7 @@ interface GrenadeRow {
   zone: string | null;
   favorited: boolean;
   health?: string | null; // v3 S4：alive/aging/stale（stale=过期红标、aging=存疑黄标）
+  source?: "video" | "custom"; // v4：创建人标记（bvid=null → custom）
 }
 
 interface GrenadeImageRow {
@@ -316,13 +319,24 @@ function CardImages({ cardId }: { cardId: number }) {
 }
 
 function GrenadeLibrary() {
-  const grenades = useQuery({
-    queryKey: ["grenades"],
-    queryFn: () => apiGet<GrenadeRow[]>("/bili/grenades"),
-  });
   const qc = useQueryClient();
+  // v4 筛选：创建人（video/custom）+ 点位（服务端精确匹配）
+  const [source, setSource] = useState<"" | "video" | "custom">("");
+  const [pointKw, setPointKw] = useState("");
   const [activeMap, setActiveMap] = useState<string>("");
   const [activeZone, setActiveZone] = useState<string>("全部");
+  const [customOpen, setCustomOpen] = useState(false);
+
+  const grenades = useQuery({
+    queryKey: ["grenades", source, pointKw],
+    queryFn: () => {
+      const qs = new URLSearchParams();
+      if (source) qs.set("source", source);
+      if (pointKw.trim()) qs.set("point", pointKw.trim());
+      const suffix = qs.toString() ? `?${qs.toString()}` : "";
+      return apiGet<GrenadeRow[]>(`/bili/grenades${suffix}`);
+    },
+  });
 
   const fav = useMutation({
     mutationFn: (p: { id: number; favorited: boolean }) =>
@@ -349,7 +363,31 @@ function GrenadeLibrary() {
     .filter((g) => activeZone === "全部" || inferZone(g) === activeZone);
 
   return (
-    <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+    <Space direction="vertical" size="middle" style={{ width: "100%" }} data-testid="grenade-list">
+      {/* v4 筛选条：创建人 + 点位 + 新建入口 */}
+      <Space size={8} wrap>
+        <Segmented
+          data-testid="source-filter"
+          value={source || "all"}
+          onChange={(v) => setSource(v === "all" ? "" : (v as "video" | "custom"))}
+          options={[
+            { label: "全部来源", value: "all" },
+            { label: "视频", value: "video" },
+            { label: "自建", value: "custom" },
+          ]}
+        />
+        <Input
+          size="small"
+          placeholder="筛选点位"
+          allowClear
+          style={{ width: 140 }}
+          value={pointKw}
+          onChange={(e) => setPointKw(e.target.value)}
+        />
+        <Button size="small" type="primary" ghost onClick={() => setCustomOpen(true)}>
+          新建道具
+        </Button>
+      </Space>
       <Space size={8} wrap>
         <Button size="small" type={!activeMap ? "primary" : "default"} onClick={() => setActiveMap("")}>
           全部（{all.length}）
@@ -406,6 +444,7 @@ function GrenadeLibrary() {
                   <Space size={6} wrap>
                     <GrenadeBadge type={g.grenade_type} />
                     <Tag color="purple">{inferZone(g)}</Tag>
+                    {g.source === "custom" ? <Tag color="cyan" data-testid={`custom-tag-${g.id}`}>自建</Tag> : null}
                     {g.timing ? <Tag>{g.timing}</Tag> : null}
                     {g.health === "stale" ? (
                       <Tag color="red" data-testid={`health-stale-${g.id}`}>过期</Tag>
@@ -438,7 +477,78 @@ function GrenadeLibrary() {
           );
         })}
       </Row>
+      <CustomGrenadeModal
+        open={customOpen}
+        onClose={() => setCustomOpen(false)}
+        onSaved={() => {
+          setCustomOpen(false);
+          qc.invalidateQueries({ queryKey: ["grenades"] });
+        }}
+      />
     </Space>
+  );
+}
+
+// ---------- 自建道具表单（v4） ----------
+function CustomGrenadeModal({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: () => void }) {
+  const [form] = Form.useForm();
+  const pendingRef = useRef<File[]>([]);
+  const create = useMutation({
+    mutationFn: (values: Record<string, string>) => {
+      const files = pendingRef.current;
+      return apiUpload<{ id: number; source: string }>("/bili/grenades/custom", files, values);
+    },
+    onSuccess: () => {
+      message.success("自建道具已保存");
+      form.resetFields();
+      pendingRef.current = [];
+      onSaved();
+    },
+    onError: (e: Error) => message.error(`保存失败：${e.message}`),
+  });
+
+  return (
+    <Modal
+      title="新建道具"
+      open={open}
+      onCancel={onClose}
+      confirmLoading={create.isPending}
+      onOk={() => form.submit()}
+      okText="创建"
+    >
+      <Form form={form} layout="vertical" onFinish={(v) => create.mutate(v as Record<string, string>)}>
+        <Form.Item name="map_name" label="地图" rules={[{ required: true, message: "地图必填" }]}>
+          <Input placeholder="如 Mirage" />
+        </Form.Item>
+        <Form.Item name="point" label="点位">
+          <Input placeholder="如 A1 / VIP / 香蕉道" />
+        </Form.Item>
+        <Form.Item name="grenade_type" label="道具类型">
+          <Input placeholder="烟雾弹 / 闪光弹 / 燃烧弹 / 手雷" />
+        </Form.Item>
+        <Form.Item name="stance" label="站位">
+          <Input placeholder="站在哪、瞄哪里" />
+        </Form.Item>
+        <Form.Item name="timing" label="时机">
+          <Input placeholder="开局 / 中局 / 回防" />
+        </Form.Item>
+        <Form.Item name="content_md" label="要点描述">
+          <Input.TextArea rows={3} placeholder="怎么投、落点、注意事项" />
+        </Form.Item>
+        <Form.Item label="贴图（可选，≤9 张）">
+          <Upload
+            accept="image/jpeg,image/png,image/webp"
+            maxCount={9}
+            beforeUpload={(_f, fileList) => {
+              pendingRef.current = fileList;
+              return false;
+            }}
+          >
+            <Button size="small">选择图片</Button>
+          </Upload>
+        </Form.Item>
+      </Form>
+    </Modal>
   );
 }
 

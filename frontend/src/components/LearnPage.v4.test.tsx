@@ -55,8 +55,9 @@ function renderPage() {
   );
 }
 
-function defaultApiGet(path: string): unknown {
+async function defaultApiGet(path: string): Promise<unknown> {
   if (path.startsWith("/bili/videos")) return VIDEOS;
+  if (path.includes("images")) return [];
   if (path.startsWith("/bili/grenades")) return GRENADES;
   return [];
 }
@@ -80,10 +81,13 @@ describe("学道具 v4：自建道具（新建表单）", () => {
     fireEvent.change(mapInput, { target: { value: "Mirage" } });
     const pointInput = screen.getByLabelText(/点位/);
     fireEvent.change(pointInput, { target: { value: "B 小" } });
-    fireEvent.click(screen.getByRole("button", { name: /提交|保存|创建/ }));
+    // antd Modal 在 portal 渲染 footer 按钮（okText=创建）
+    const okBtn = await screen.findByRole("button", { name: /^创 建$|创建/ }, { timeout: 3000 });
+    fireEvent.click(okBtn);
     await waitFor(() => {
-      expect(apiPostMock).toHaveBeenCalledWith(
+      expect(apiUploadMock).toHaveBeenCalledWith(
         "/bili/grenades/custom",
+        expect.anything(),
         expect.objectContaining({ map_name: "Mirage", point: "B 小" }),
       );
     });
@@ -91,9 +95,10 @@ describe("学道具 v4：自建道具（新建表单）", () => {
 
   test("V4.2 自建卡带「自建」Tag、视频卡不带", async () => {
     renderPage();
-    await waitFor(() => expect(screen.getByText(/VIP/)).toBeTruthy());
-    const zone = document.querySelector('[data-testid="grenade-list"]')?.textContent ?? "";
-    expect(zone).toContain("自建");
+    const tag = await screen.findByTestId("custom-tag-2");
+    expect(tag.textContent).toContain("自建");
+    // 视频卡（id=1）不带自建 Tag
+    expect(screen.queryByTestId("custom-tag-1")).toBeNull();
   });
 });
 
@@ -109,8 +114,10 @@ describe("学道具 v4：筛选（创建人/点位）", () => {
 
   test("V4.3 切「自建」→ 请求带 source=custom", async () => {
     renderPage();
-    const customBtn = await screen.findByRole("button", { name: /自建/ });
-    fireEvent.click(customBtn);
+    const customBtn = await screen.findByTestId("source-filter");
+    const label = [...customBtn.querySelectorAll(".ant-segmented-item-label")]
+      .find((el) => el.textContent === "自建") as HTMLElement;
+    fireEvent.click(label);
     await waitFor(() => {
       const calls = apiGetMock.mock.calls.filter(([p]) => String(p).includes("/bili/grenades"));
       const last = calls[calls.length - 1]?.[0] ?? "";

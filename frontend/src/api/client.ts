@@ -46,9 +46,12 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
   return resp.json();
 }
 
-// multipart 文件上传（道具卡贴图）：不设 Content-Type（浏览器自动带 boundary）
-export async function apiUpload<T>(path: string, files: File[]): Promise<T> {
+// multipart 文件上传（道具卡贴图 / 自建道具）：可带额外字段；不设 Content-Type（浏览器自动带 boundary）
+export async function apiUpload<T>(path: string, files: File[], extra?: Record<string, string>): Promise<T> {
   const form = new FormData();
+  for (const [k, v] of Object.entries(extra ?? {})) {
+    if (v) form.append(k, v);
+  }
   for (const f of files) form.append("files", f);
   const resp = await fetch(`${API}${path}`, { method: "POST", body: form });
   if (!resp.ok) throw new Error(`POST ${path}: HTTP ${resp.status}`);
