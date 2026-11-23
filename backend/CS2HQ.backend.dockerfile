@@ -3,6 +3,11 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# RapidOCR（opencv-python）运行时系统依赖：libxcb/libGL/libglib；curl 为 healthcheck
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libxcb1 libgl1 libglib2.0-0 curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # 先拷贝清单利用层缓存（requirements 全部 == 锁版）
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
