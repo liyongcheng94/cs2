@@ -87,15 +87,52 @@ async def chat_stream(user_content: str, session_id: int | None = None, session_
 
 
 def _build_instruction() -> str:
-    """注入玩家画像 + 最近复盘（教练答的是'你'，不是通用攻略）。"""
+    """注入玩家画像 + 赛季真实数据 + 道具卡索引 + 最近复盘（教练答的是'你'，不是通用攻略）。"""
     parts = [load_prompt("coach") or "你是用户的专属 CS2 教练，回答具体、可执行、不套话，中文。"]
     with session_factory() as s:
+        # 赛季真实数据（detailStats 快照，wanmei_sync 自动更新）——优先于画像旧值
+        from ..models import GrenadeCard, SeasonStats
+
+        season = s.exec(select(SeasonStats).order_by(SeasonStats.updated_at.desc())).first()
+        season_hs: float | None = None
+        if season is not None and season.payload:
+            p = season.payload
+            season_hs = p.get("headShotRatio")
+            lines = [
+                f"赛季真实数据（{p.get('cnt', '?')} 场，平台同步）：",
+                f"- rating {p.get('rating')} / KD {p.get('kd')} / ADR {p.get('adr')} / 胜率 {p.get('winRate')}",
+                f"- 爆头率 {season_hs} / 首杀率 {p.get('entryKillRatio')} / 多杀回合 {p.get('multiKill')}",
+            ]
+            for m in (p.get("hotMaps") or [])[:3]:
+                fk, fd = m.get("firstKillNum"), m.get("firstDeathNum")
+                fk_ratio = f"，首杀{fk}/首死{fd}" + ("（首死多于首杀，突破位偏保守）" if isinstance(fk, (int, float)) and isinstance(fd, (int, float)) and fd > fk else "")
+                lines.append(
+                    f"- {m.get('mapName') or m.get('map')}: {m.get('totalMatch')}场 胜{m.get('winCount')}{fk_ratio}"
+                )
+            parts.append("## 赛季数据\n" + "\n".join(lines))
+
         prof = s.get(PlayerProfile, "baseline")
         if prof is not None:
             d = prof.data
+            hs = season_hs if season_hs is not None else d.get("hs_rate")
             parts.append(
                 f"玩家画像：eDPI≈{d.get('edpi')}，主玩 {d.get('main_map')}，"
-                f"等级 {d.get('grades')}，爆头率 {d.get('hs_rate')}，来源：{d.get('source')}"
+                f"等级 {d.get('grades')}，爆头率 {hs}，来源：{d.get('source')}"
+            )
+        # 道具卡索引（最多 30 张，收藏优先）：教练可引用具体卡与视频时间戳
+        cards = s.exec(
+            select(GrenadeCard).order_by(GrenadeCard.favorited.desc(), GrenadeCard.id.desc()).limit(30)
+        ).all()
+        if cards:
+            idx = "；".join(
+                f"{c.map_name}·{c.point or '?'}·{c.grenade_type or '?'}"
+                + (f"（{c.video_ts}s，BV{c.bvid[2:] if c.bvid else ''}）" if c.video_ts and c.bvid else (f"（{c.video_ts}s）" if c.video_ts else ""))
+                + ("★" if c.favorited else "")
+                for c in cards
+            )
+            parts.append(
+                f"## 道具卡库（{len(cards)} 张，用户可学的点位道具）\n{idx}\n"
+                "用户问道具时优先引用上表；提到某卡时给出地图/点位/时机，视频时间戳照抄。"
             )
         recent = s.exec(select(Report).order_by(Report.created_at.desc()).limit(3)).all()
         if recent:
