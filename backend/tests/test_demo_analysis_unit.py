@@ -7,6 +7,7 @@ from app.services.demo_analysis import (
     _round_of_tick,
     analyze_deaths,
     analyze_duels,
+    analyze_duels_damage,
     analyze_economy,
     analyze_utility,
     distance_bucket,
@@ -312,3 +313,52 @@ def test_analyze_economy_win_pattern():
     assert dim.full_buy_lose_rate == 0.333
     assert dim.effective_buy_ratio is None
     assert len(dim.buy_decisions) == 5  # 只统计 user 侧
+
+
+def _damages_frame(rows):
+    cols = ["attacker_steamid", "victim_steamid", "weapon", "tick"]
+    data = {c: [] for c in cols}
+    for r in rows:
+        for c in cols:
+            data[c].append(r.get(c))
+    return pl.DataFrame(data)
+
+
+def test_analyze_duels_damage_first_strike_and_mirror():
+    """
+    Given 三段交火（击杀事件切窗）：
+      W1 镜像 m4a1：user 先手 → user 击杀（胜）
+      W2 非镜像 ak47vs awp：对方先手 → 对方击杀（负）
+      W3 镜像 m4a1：user 先手 → 无击杀结算（不计分母）
+    When  analyze_duels_damage
+    Then  first_strike_win_rate=1.0（仅 W1 计）、mirror_win_rate=1.0（仅 W1 计，W3 无结局剔除）
+    """
+    sid, foe = 111, 222
+    damages = _damages_frame([
+        # W1: user 先手，双方互伤，user 击杀
+        {"attacker_steamid": sid, "victim_steamid": foe, "weapon": "m4a1", "tick": 100},
+        {"attacker_steamid": foe, "victim_steamid": sid, "weapon": "m4a1", "tick": 110},
+        # W2: 对方先手，user 换血，对方击杀
+        {"attacker_steamid": foe, "victim_steamid": sid, "weapon": "awp", "tick": 200},
+        {"attacker_steamid": sid, "victim_steamid": foe, "weapon": "ak47", "tick": 210},
+        # W3: user 先手互伤，无击杀（贴脸脱战）
+        {"attacker_steamid": sid, "victim_steamid": foe, "weapon": "m4a1", "tick": 300},
+        {"attacker_steamid": foe, "victim_steamid": sid, "weapon": "m4a1", "tick": 310},
+    ])
+    kills = _kills_frame([
+        {"attacker_steamid": sid, "victim_steamid": foe, "attacker_side": "ct", "weapon": "m4a1", "tick": 120,
+         "attacker_x": 0, "attacker_y": 0, "attacker_z": 0, "victim_x": 100, "victim_y": 0, "victim_z": 0,
+         "assister_steamid": None, "victim_traded": False, "thrusmoke": False, "attackerblind": False},
+        {"attacker_steamid": foe, "victim_steamid": sid, "attacker_side": "t", "weapon": "awp", "tick": 220,
+         "attacker_x": 0, "attacker_y": 0, "attacker_z": 0, "victim_x": 0, "victim_y": 0, "victim_z": 0,
+         "assister_steamid": None, "victim_traded": False, "thrusmoke": False, "attackerblind": False},
+    ])
+    fs, mirror = analyze_duels_damage(damages, kills, sid)
+    assert fs == 1.0
+    assert mirror == 1.0
+
+
+def test_analyze_duels_damage_empty():
+    """Given 无伤害事件 When analyze_duels_damage Then 双指标 None（不臆造 0）。"""
+    fs, mirror = analyze_duels_damage(_damages_frame([]), _kills_frame([]), 111)
+    assert fs is None and mirror is None
