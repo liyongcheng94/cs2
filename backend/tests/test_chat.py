@@ -135,3 +135,70 @@ def test_chat_ai_unavailable_surfaces_error(client, monkeypatch):
     assert resp.status_code == 502
     msgs = client.get(f"/api/chat/sessions/{sid}/messages").json()
     assert [m["role"] for m in msgs] == ["user"]  # 只有用户消息，无假回复
+
+
+def test_chat_without_session_id_auto_creates(client, stub_ai_bridge):
+    """
+    Given 未带 session_id 的对话请求
+    When  POST /api/chat
+    Then  自动创建会话，返回 session_id，标题取首句（服务层 None 分支）
+    """
+    resp = client.post("/api/chat", json={"content": "怎么练A大道具"})
+    assert resp.status_code == 200
+    sid = resp.json()["session_id"]
+    assert sid is not None
+    sess = client.get("/api/chat/sessions").json()
+    mine = next(x for x in sess if x["id"] == sid)
+    assert mine["title"].startswith("怎么练A大")
+
+
+def test_chat_stream_without_session_auto_creates(client, stub_ai_bridge):
+    """
+    Given 未带 session_id 的流式请求（mindvault 桥单段回退）
+    When  POST /api/chat/stream
+    Then  SSE 含增量与 done 事件（携带新 session_id），且消息已入库
+    """
+    resp = client.post("/api/chat/stream", json={"content": "流式练什么"})
+    assert resp.status_code == 200
+    body = resp.text
+    assert '"delta"' in body
+    assert '"done"' in body
+    sid = json.loads([l for l in body.splitlines() if '"done"' in l][0][len("data: "):])["session_id"]
+    msgs = client.get(f"/api/chat/sessions/{sid}/messages").json()
+    assert [m["role"] for m in msgs] == ["user", "assistant"]
+
+
+def test_chat_stream_ai_error_emits_error_event(client, monkeypatch):
+    """
+    Given 流式过程中 AI 失败（401）
+    When  POST /api/chat/stream
+    Then  SSE 输出 error 事件（不崩流，无 done），user 消息仍入库
+    """
+    from app.services.ai_client import AiClient
+
+    import app.services.chat_coach as cc
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/auth/login":
+            return httpx.Response(200, json={"ok": True}, headers={"set-cookie": "mv_session=t; Path=/"})
+        return httpx.Response(401)
+
+    monkeypatch.setattr(cc, "build_ai_client", lambda session: AiClient(
+        provider="mindvault", mv_base_url="http://stub", mv_password="bad",
+        transport=httpx.MockTransport(handler)))
+    sid = _seed_session_with_history(client)
+    resp = client.post("/api/chat/stream", json={"session_id": sid, "content": "hi"})
+    assert resp.status_code == 200
+    assert '"error"' in resp.text and '"done"' not in resp.text
+    msgs = client.get(f"/api/chat/sessions/{sid}/messages").json()
+    assert [m["role"] for m in msgs] == ["user"]
+
+
+def test_chat_empty_content_rejected(client):
+    """
+    Given 空白消息
+    When  POST /api/chat 与 /api/chat/stream
+    Then  400（防呆：不烧 AI 配额）
+    """
+    assert client.post("/api/chat", json={"content": "   "}).status_code == 400
+    assert client.post("/api/chat/stream", json={"content": ""}).status_code == 400
