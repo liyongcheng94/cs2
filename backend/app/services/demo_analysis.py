@@ -32,10 +32,12 @@ from ..schemas.analysis import (
     SCHEMA_VERSION,
     ThrowEvent,
     UtilityDim,
+    UtilitySpot,
 )
 from .highlight import detect_highlights
 
 UNIT_TO_M = 0.01905
+TICK_RATE = 64  # CS2 标准 64 tick（blind 散点 start_tick 复用为致盲时长帧数展示）
 
 WEAPON_CLASSES = {
     "awp": "sniper", "ssg08": "sniper", "scar20": "sniper",
@@ -287,6 +289,46 @@ def analyze_economy(demo, kills, rounds, steam_id: int, user_side: str | None) -
     )
 
 
+def collect_utility_spots(demo, steam_id: int, user_side: str | None) -> list[UtilitySpot]:
+    """道具落点采集（1.1）：user 侧烟/火落点 + 与 user 相关的致盲被闪位置（雷达散点数据源）。"""
+    spots: list[UtilitySpot] = []
+
+    def add(kind: str, rows, x_key: str, y_key: str, side_key: str | None = None, side_val: str | None = None):
+        for r in rows:
+            x, y = r.get(x_key), r.get(y_key)
+            if x is None or y is None:
+                continue
+            spots.append(UtilitySpot(
+                kind=kind, x=float(x), y=float(y),
+                start_tick=int(r["start_tick"]) if r.get("start_tick") is not None else None,
+                end_tick=int(r["end_tick"]) if r.get("end_tick") is not None else None,
+                side=(r.get(side_key) if side_key else side_val),
+            ))
+
+    if user_side:
+        smokes = getattr(demo, "smokes", None)
+        if smokes is not None and smokes.height:
+            add("smoke", smokes.filter(col("thrower_side") == user_side).to_dicts(), "x", "y", "thrower_side")
+        fires = getattr(demo, "fires", None)
+        if fires is not None and fires.height:
+            add("fire", fires.filter(col("thrower_side") == user_side).to_dicts(), "x", "y", "thrower_side")
+    blinds = getattr(demo, "blinds", None)
+    if blinds is not None and blinds.height:
+        mine = blinds.filter(
+            (col("attacker_steamid") == steam_id) | (col("victim_steamid") == steam_id)
+        ).to_dicts()
+        for r in mine:
+            x, y = r.get("victim_x"), r.get("victim_y")
+            if x is None or y is None:
+                continue
+            spots.append(UtilitySpot(
+                kind="blind", x=float(x), y=float(y),
+                start_tick=int(r["duration"] * TICK_RATE) if r.get("duration") is not None else None,
+                side=r.get("victim_side"),
+            ))
+    return spots
+
+
 def analyze_utility(demo, grenades, steam_id: int) -> UtilityDim:
     """道具：投掷清单（按 entity_id 去重——grenades 帧是逐 tick 轨迹，非事件）+ awpy blinds 敌友拆分 + 闪光浪费率。
 
@@ -387,6 +429,7 @@ def run_analysis(dem_path, match_id: str, steam_id: str) -> tuple[FourDimAnalysi
         duels_dim.mirror_win_rate = mirror_rate
         economy_dim = analyze_economy(demo, kills, rounds, sid, user_side)
         utility_dim = analyze_utility(demo, grenades, sid)
+        utility_dim.spots = collect_utility_spots(demo, sid, user_side)
         highlights = detect_highlights(kills, rounds, sid, user_side)
 
         analysis = FourDimAnalysis(

@@ -70,6 +70,17 @@ class ThrowEvent(BaseModel):
     blind_seconds: float | None = None
 
 
+class UtilitySpot(BaseModel):
+    """道具落点（1.1，雷达散点图数据源）：烟/火为落点，blind 为被闪者位置。"""
+
+    kind: Literal["smoke", "fire", "blind"]
+    x: float
+    y: float
+    start_tick: int | None = None
+    end_tick: int | None = None
+    side: str | None = None
+
+
 class GrenadeUsage(BaseModel):
     """分道具购买 vs 使用（1.1）：买了没扔 = 经济浪费。"""
 
@@ -86,6 +97,7 @@ class UtilityDim(BaseModel):
     enemy_blind_s: float | None = None  # 1.1：致盲敌方累计秒数（>0.1s 计入，自闪排除）
     team_blind_s: float | None = None  # 1.1：致盲队友累计秒数（>0.1s 计入，自闪排除）
     usage: list[GrenadeUsage] = Field(default_factory=list)  # 1.1：分道具购买 vs 使用
+    spots: list[UtilitySpot] = Field(default_factory=list)  # 1.1：道具落点（雷达散点）
 
 
 class AnalysisMeta(BaseModel):
