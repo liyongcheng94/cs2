@@ -105,7 +105,7 @@ async def bili_learn_handler(task: Task, session_factory_fn: Callable[[], Sessio
 
             v = bili_video_mod.Video(bvid=bv, credential=Credential(sessdata=sess))
             info = await v.get_info()
-            targets = [{"bvid": bv, "title": info.get("title"), "author": (info.get("owner") or {}).get("name")}]
+            targets = [{"bvid": bv, "title": info.get("title"), "author": (info.get("owner") or {}).get("name"), "pubdate": info.get("pubdate")}]
         except Exception as exc:  # noqa: BLE001 — 信息获取失败不阻断学习
             logger.warning(f"[B站学习] 视频信息获取失败（用 BV 代替标题）：{exc}")
             targets = [{"bvid": bv}]
@@ -153,6 +153,7 @@ async def bili_learn_handler(task: Task, session_factory_fn: Callable[[], Sessio
             _upsert_video_summary(s, bv, summary_md, summary_model)
             row = s.exec(select(BiliVideo).where(BiliVideo.bvid == bv)).first()
             existing_uuid = row.mv_uuid if row is not None else None
+            video_pubdate = t.get("pubdate")
             for c in cards:
                 chash = hashlib.sha256(f"{bv}:{c.get('point')}:{c.get('grenade_type')}".encode()).hexdigest()
                 if s.exec(select(GrenadeCard).where(GrenadeCard.source_hash == chash)).first() is None:
@@ -162,8 +163,26 @@ async def bili_learn_handler(task: Task, session_factory_fn: Callable[[], Sessio
                         timing=c.get("timing"), video_ts=c.get("video_ts"), bvid=bv,
                         content_md=c.get("content_md", ""), source_hash=chash,
                         zone=c.get("zone"),
+                        video_pubdate=int(video_pubdate) if video_pubdate else None,
                     ))
             s.commit()
+
+        # v3 S1 集成：评论时效信号顺路抓取（任何失败降级空列表，不阻断学习）
+        video_pubdate = t.get("pubdate") or 0
+        if video_pubdate:
+            from .bili_signals import extract_comment_signals, fetch_comments, save_signals
+
+            try:
+                comments = await fetch_comments(bv, max_pages=2)
+                signals = extract_comment_signals(comments, int(video_pubdate))
+            except Exception as exc:  # noqa: BLE001 — 信号是锦上添花
+                logger.warning(f"[B站学习] bvid={bv} 评论信号失败（忽略）：{type(exc).__name__}: {str(exc)[:80]}")
+                signals = []
+            if signals:
+                with session_factory_fn() as s:
+                    new_cards = s.exec(select(GrenadeCard).where(GrenadeCard.bvid == bv)).all()
+                    added = sum(save_signals(s, c.id, signals) for c in new_cards)
+                logger.info(f"[B站学习] bvid={bv} 评论信号入库 {added} 条")
 
         async def _push_or_update(title_arg: str, md_arg: str, existing_uuid: str | None) -> dict:
             mv = _new_mv()
