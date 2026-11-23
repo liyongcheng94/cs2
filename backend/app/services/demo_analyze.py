@@ -78,6 +78,25 @@ async def demo_analyze_handler(task: Task, session_factory_fn: Callable[[], Sess
     _set_demo_status(match_id, "analyzed")
     logger.info(f"[demo解析] matchId={match_id} 耗时={meta.get('cost_s')}s 峰值内存={meta.get('peak_mem_mb')}MB parser={meta.get('parser')}")
 
+    # 2.5) 服务器评价六维评分（拉 v1 全场数据 + 道具统计归一化；失败留空不阻断）
+    try:
+        with session_factory_fn() as session:
+            api = build_api_from_settings(session)
+        v1 = await api.match_detail_v1(match_id)
+        from .demo_analysis import compute_server_ratings
+
+        ratings = compute_server_ratings(v1.get("players") or [], analysis.utility.players)
+        analysis.server_ratings = ratings
+        with session_factory_fn() as session:
+            row = session.exec(select(DemoAnalysis).where(DemoAnalysis.match_id == match_id)).first()
+            if row is not None:
+                row.payload = analysis.model_dump()
+                session.add(row)
+                session.commit()
+        logger.info(f"[demo解析] matchId={match_id} 六维评分完成")
+    except Exception as exc:  # noqa: BLE001 — 评分失败不影响主链路
+        logger.warning(f"[demo解析] matchId={match_id} 六维评分跳过：{exc}")
+
     # 3) 复盘（AI 桥；provider 未配好自动降级纯文本）
     with session_factory_fn() as session:
         from .ai_client import build_ai_client
