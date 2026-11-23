@@ -153,3 +153,16 @@ async def test_build_report_invalid_json_degrades():
     assert degraded is True
     assert review is None
     assert md  # 降级纯文本复盘仍产出 markdown
+
+
+def test_rule_based_focus_economic_redline():
+    """
+    Given 满编局败率 60%（资源转化差）且无其他红线
+    When  rule_based_focus
+    Then  返回资源转化指令（经济硬红线）
+    """
+    from app.schemas.analysis import EconomyDim, FourDimAnalysis
+
+    a = FourDimAnalysis(match_id="PVP@E", economy=EconomyDim(full_buy_lose_rate=0.6))
+    focus = rule_based_focus(a)
+    assert focus is not None and "满编" in focus

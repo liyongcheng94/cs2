@@ -71,6 +71,16 @@ def _build_instruction() -> str:
         if recent:
             titles = "；".join(r.title for r in recent)
             parts.append(f"最近的复盘笔记：{titles}（用户追问战绩细节时可引用其数据口径）")
+        # 惯性死亡点（1.1）：跨场网格聚合的重复死亡区域，教练可主动点名
+        from .death_patterns import death_patterns
+
+        patterns = death_patterns(s)
+        if patterns:
+            desc = "；".join(
+                f"{p['map_name']}({p['x']},{p['y']}) {p['count']}次/跨{p['matches_n']}场"
+                for p in patterns
+            )
+            parts.append(f"惯性死亡点（跨场重复死亡区域）：{desc}——用户提问位置/残局问题时优先对照这些点位")
     return "\n\n".join(parts)
 
 

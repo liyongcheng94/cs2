@@ -80,6 +80,8 @@ async def demo_analyze_handler(task: Task, session_factory_fn: Callable[[], Sess
 
     # 2.5) 服务器评价六维评分（拉 v1 全场数据 + 道具统计归一化；失败留空不阻断）
     try:
+        from .wanmei_sync import build_api_from_settings
+
         with session_factory_fn() as session:
             api = build_api_from_settings(session)
         v1 = await api.match_detail_v1(match_id)

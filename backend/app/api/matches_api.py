@@ -34,6 +34,42 @@ def season_stats(session: SessionDep) -> dict:
     return {"season_id": row.season_id, "data": row.payload, "updated_at": row.updated_at.isoformat()}
 
 
+@router.get("/stats/trends")
+def stats_trends(session: SessionDep) -> dict:
+    """长期追踪（1.1）：逐场聚合点（rating/adr/经济/道具指标）+ 地图胜率。"""
+    matches = session.exec(select(Match).order_by(Match.played_at.desc())).all()
+    stats = {s.match_id: s for s in session.exec(select(MatchStat)).all()}
+    analyses = {a.match_id: a.payload or {} for a in session.exec(select(DemoAnalysis)).all()}
+
+    points: list[dict] = []
+    by_map: dict[str, dict] = {}
+    for m in matches:
+        stat = stats.get(m.match_id)
+        payload = analyses.get(m.match_id, {})
+        map_en = MAP_NAME_EN.get(m.map_name, "")
+        points.append({
+            "match_id": m.match_id,
+            "played_at": m.played_at.isoformat() if m.played_at else None,
+            "map_name": m.map_name,
+            "map_en": map_en,
+            "win": m.win,
+            "rating": stat.rating if stat else None,
+            "adr": stat.adr if stat else None,
+            "hs_rate": stat.hs_rate if stat else None,
+            "utility": payload.get("utility"),
+            "economy": payload.get("economy"),
+        })
+        if not map_en:
+            continue
+        bucket = by_map.setdefault(map_en, {"map_en": map_en, "map_name": m.map_name, "games": 0, "wins": 0})
+        bucket["games"] += 1
+        if m.win:
+            bucket["wins"] += 1
+    for bucket in by_map.values():
+        bucket["win_rate"] = round(bucket["wins"] / bucket["games"], 3) if bucket["games"] else None
+    return {"points": points, "by_map": list(by_map.values())}
+
+
 @router.get("")
 def list_matches(session: SessionDep) -> list[dict]:
     stmt = select(Match).order_by(Match.played_at.desc())

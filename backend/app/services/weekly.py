@@ -1,6 +1,7 @@
 """周报：近 7 天对局聚合（胜率/平均 rating/demo 分析数/道具卡数）→ 推送 MindVault「CS2周报」。"""
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta
 from typing import Callable
 
@@ -88,6 +89,20 @@ async def weekly_report_handler(task: Task, session_factory_fn: Callable[[], Ses
     comment = await _ai_week_comment(payload, recent_titles)
     if comment:
         md += "\n\n## AI 周评\n\n" + comment
+
+    # 惯性死亡点（1.1）：跨场网格聚合，同图同区 ≥3 次死亡
+    from .death_patterns import death_patterns
+
+    with session_factory_fn() as session:
+        patterns = death_patterns(session)
+    if patterns:
+        lines = ["", "## 惯性死亡点", "跨场重复死亡的网格区域（≥3 次），优先安排点位复盘："]
+        for p in patterns:
+            lines.append(
+                f"- {p['map_name']} ({p['x']}, {p['y']})：{p['count']} 次 / 跨 {p['matches_n']} 场"
+                + (f"（含劣势枪位 {p['disadvantaged_n']} 次）" if p["disadvantaged_n"] else "")
+            )
+        md += "\n".join(lines)
 
     title = f"CS2 周报 · {week}"
     out: dict = {"created": False, "uuid": None, "reason": None, "week": week}

@@ -16,6 +16,7 @@ PROMPT_VERSION = PromptVersion = "v1"
 
 # Rule-based 硬红线（评审确定的双轨制：触发即强制，AI 不自由发挥）
 NEAR_RANGE_REDLINE = 0.30  # 0-5m 对枪胜率低于 30%
+FULL_BUY_LOSE_REDLINE = 0.50  # 满编局败率高于 50%（资源转化差）
 UTILITY_WASTE_REDLINE = 0.35  # 道具浪费率高于 35%
 DISADVANTAGED_REDLINE = 0.40  # 劣势枪位死亡率高于 40%
 
@@ -30,6 +31,8 @@ def rule_based_focus(analysis: FourDimAnalysis) -> str | None:
     for b in analysis.duels.by_weapon_distance:
         if b.distance == "0-5m" and b.win_rate is not None and b.win_rate < NEAR_RANGE_REDLINE:
             return "近战急停：aim_botz 移动急停开枪 10 分钟，只打两发就停"
+    if analysis.economy.full_buy_lose_rate is not None and analysis.economy.full_buy_lose_rate > FULL_BUY_LOSE_REDLINE:
+        return "资源转化：满编局打不出优势——复盘每个满编回合的首个交火点，避免单人无信息探点"
     if analysis.utility.waste_rate is not None and analysis.utility.waste_rate > UTILITY_WASTE_REDLINE:
         return "道具专项：主图 3 个固定道具各练 5 次，直到 100% 成功"
     if analysis.deaths.disadvantaged_rate is not None and analysis.deaths.disadvantaged_rate > DISADVANTAGED_REDLINE:

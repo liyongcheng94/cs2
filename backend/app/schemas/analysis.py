@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
 
 DistanceBucket = Literal["0-5m", "5-15m", "15m+"]
 
@@ -56,8 +56,10 @@ class BuyDecision(BaseModel):
 
 class EconomyDim(BaseModel):
     buy_decisions: list[BuyDecision] = Field(default_factory=list)
-    effective_buy_ratio: float | None = None  # 装备价值 / 总资金
+    effective_buy_ratio: float | None = None  # 装备价值 / 总资金（无总资金列，留 null）
     first_kill_conversion: float | None = None  # 首杀方赢下该回合的概率
+    eco_win_rate: float | None = None  # 1.1：eco/force 回合胜率（经济抗压能力）
+    full_buy_lose_rate: float | None = None  # 1.1：full buy 回合败率（资源转化能力）
 
 
 class ThrowEvent(BaseModel):
@@ -68,6 +70,7 @@ class ThrowEvent(BaseModel):
     blind_seconds: float | None = None
 
 
+<<<<<<< HEAD
 class UtilityPlayer(BaseModel):
     """单玩家道具统计（全场 10 人，道具分析 Tab 数据源）。"""
 
@@ -89,20 +92,63 @@ class ServerRatings(BaseModel):
 
     players: dict[str, dict[str, float]] = Field(default_factory=dict)  # playerId -> 六维
     averages: dict[str, float] = Field(default_factory=dict)  # 本场均值
+=======
+class UtilitySpot(BaseModel):
+    """道具落点（1.1，雷达散点图数据源）：烟/火为落点，blind 为被闪者位置。"""
+
+    kind: Literal["smoke", "fire", "blind"]
+    x: float
+    y: float
+    start_tick: int | None = None
+    end_tick: int | None = None
+    side: str | None = None
+
+
+class GrenadeUsage(BaseModel):
+    """分道具购买 vs 使用（1.1）：买了没扔 = 经济浪费。"""
+
+    grenade_type: str
+    bought: int = 0  # item_events purchase 计数（按类型映射）
+    thrown: int = 0  # grenades 实际投掷数（entity_id 去重）
+    waste_rate: float | None = None  # bought>0: max(0, bought-thrown)/bought；捡漏（bought=0 且 thrown>0）记 0.0
+>>>>>>> feature/insights-v1
 
 
 class UtilityDim(BaseModel):
     throws: list[ThrowEvent] = Field(default_factory=list)
+<<<<<<< HEAD
     blind_median_s: float | None = None  # 致盲时长中位数（抗离群值）
     waste_rate: float | None = None  # 未致盲/未造成伤害的投掷物占比
     players: list[UtilityPlayer] = Field(default_factory=list)  # 全场玩家道具统计
     server_ratings: ServerRatings | None = None  # 六维能力评分（服务器评价 Tab）
+=======
+    blind_median_s: float | None = None  # 致盲敌方时长中位数（抗离群值；1.1 口径仅敌方）
+    waste_rate: float | None = None  # 闪光浪费率：1 - 有效闪（敌方致盲>0.5s 数）/ 闪光投掷数
+    enemy_blind_s: float | None = None  # 1.1：致盲敌方累计秒数（>0.1s 计入，自闪排除）
+    team_blind_s: float | None = None  # 1.1：致盲队友累计秒数（>0.1s 计入，自闪排除）
+    usage: list[GrenadeUsage] = Field(default_factory=list)  # 1.1：分道具购买 vs 使用
+    spots: list[UtilitySpot] = Field(default_factory=list)  # 1.1：道具落点（雷达散点）
+>>>>>>> feature/insights-v1
 
 
 class AnalysisMeta(BaseModel):
     parser: str
     cost_s: float | None = None
     peak_mem_mb: float | None = None
+
+
+class HighlightMoment(BaseModel):
+    """高光时刻（1.1，借鉴 cs2-highlights-maker 评分思路的纯解析版）。"""
+
+    round_no: int | None = None
+    start_tick: int | None = None
+    end_tick: int | None = None
+    kills: int = 0
+    headshots: int = 0
+    score: float | None = None
+    label: str | None = None  # 双杀/3K/4K/ACE
+    round_won: bool | None = None
+    clutch: bool | None = None  # 时刻起点队内存活 ≤2（残局近似）
 
 
 class FourDimAnalysis(BaseModel):
@@ -112,6 +158,7 @@ class FourDimAnalysis(BaseModel):
     economy: EconomyDim = Field(default_factory=EconomyDim)
     utility: UtilityDim = Field(default_factory=UtilityDim)
     duels: DuelDim = Field(default_factory=DuelDim)
+    highlights: list[HighlightMoment] = Field(default_factory=list)  # 1.1：TopN 可看性时刻
     meta: AnalysisMeta = Field(
         default_factory=lambda: AnalysisMeta(parser="unknown")
     )

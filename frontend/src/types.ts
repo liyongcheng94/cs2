@@ -23,10 +23,24 @@ export interface FourDimAnalysisShape {
     throws?: Record<string, unknown>[];
     blind_median_s?: number | null;
     waste_rate?: number | null;
+<<<<<<< HEAD
     players?: { player_id: string; nick_name: string; smoke: number; flash: number; molotov: number; he: number; flash_enemies: number; flash_teammates: number; util_dmg: number; spend: number }[];
     server_ratings?: { players: Record<string, Record<string, number>>; averages: Record<string, number> } | null;
   };
   duels?: { by_weapon_distance?: { distance: string; weapon: string; kills?: number; deaths?: number; win_rate?: number | null }[] };
+=======
+    enemy_blind_s?: number | null;
+    team_blind_s?: number | null;
+    usage?: { grenade_type: string; bought: number; thrown: number; waste_rate: number | null }[];
+    spots?: { kind: string; x: number; y: number; start_tick?: number | null; end_tick?: number | null; side?: string | null }[];
+  };
+  duels?: { by_weapon_distance?: { distance: string; weapon: string; kills?: number; deaths?: number; win_rate?: number | null }[]; first_strike_win_rate?: number | null; mirror_win_rate?: number | null };
+  highlights?: {
+    round_no: number | null; start_tick?: number | null; end_tick?: number | null;
+    kills: number; headshots: number; score?: number | null; label?: string | null;
+    round_won?: boolean | null; clutch?: boolean | null;
+  }[];
+>>>>>>> feature/insights-v1
   meta?: { parser?: string; cost_s?: number | null; peak_mem_mb?: number | null };
 }
 

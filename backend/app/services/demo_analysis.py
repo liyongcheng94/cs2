@@ -1,4 +1,4 @@
-"""四维 demo 分析引擎（选型：awpy 3.3.0 为主 + demoparser2 补 player_blind）。
+"""四维 demo 分析引擎（选型：awpy 3.3.0 统一解析；1.1 起致盲走 blinds 数据集，不再依赖 demoparser2）。
 
 口径约定（评审结论，详见 docs/spike-demo-parsers.md）：
 - 距离 = kills 帧 xyz 欧氏 × 0.01905（1 unit ≈ 1.905cm）→ 米，分桶 <5m / 5-15m / 15m+。
@@ -7,11 +7,16 @@
 - 劣势枪位（近似）：无队友支援（无同队 assister）且 (穿烟/被闪/15m+ 大狙) 之一。
 - 经济：round_economy 的 buy_type 分布；有效购买比例留 null（无总资金列，二期）。
 - 首杀转化率：user 队伍拿下回合首杀的回合中，最终该回合获胜的比例。
-- 道具：浪费率仅统计闪光弹（致盲人数=0 的投掷占比）；致盲时长中位数取 user 造成的敌方 blind_duration。
+- 道具（1.1）：blinds 数据集敌友拆分（敌方累计/队友失误/自闪排除）；闪光浪费率 = 1 - 有效闪/闪光投掷数；
+  blind_median_s 取敌方致盲时长真中位数。
 """
 from __future__ import annotations
 
+<<<<<<< HEAD
 import re
+=======
+import statistics
+>>>>>>> feature/insights-v1
 import time
 import tracemalloc
 
@@ -27,14 +32,21 @@ from ..schemas.analysis import (
     DuelDim,
     EconomyDim,
     FourDimAnalysis,
+    GrenadeUsage,
     SCHEMA_VERSION,
     ThrowEvent,
     UtilityDim,
+<<<<<<< HEAD
     UtilityPlayer,
     ServerRatings,
+=======
+    UtilitySpot,
+>>>>>>> feature/insights-v1
 )
+from .highlight import detect_highlights
 
 UNIT_TO_M = 0.01905
+TICK_RATE = 64  # CS2 标准 64 tick（blind 散点 start_tick 复用为致盲时长帧数展示）
 
 WEAPON_CLASSES = {
     "awp": "sniper", "ssg08": "sniper", "scar20": "sniper",
@@ -46,6 +58,16 @@ WEAPON_CLASSES = {
     "nova": "shotgun", "xm1014": "shotgun", "mag7": "shotgun", "sawedoff": "shotgun",
 }
 AWP_LIKE = {"awp", "ssg08", "scar20"}
+
+# item_events purchase 的 item 名 → grenades.type 投掷类型名（实测映射，incendiary 合火）
+PURCHASE_ITEM_TO_GRENADE = {
+    "smokegrenade": "smoke",
+    "flashbang": "flashbang",
+    "hegrenade": "he",
+    "molotov": "molotov",
+    "incendiary": "molotov",
+    "decoy": "decoy",
+}
 
 
 def weapon_class(weapon: str | None) -> str:
@@ -63,6 +85,7 @@ def distance_bucket(dist_m: float) -> str:
     return "15m+"
 
 
+<<<<<<< HEAD
 def _sid(v) -> str:
     """steamid 归一化：字符串直接返回（保精度），浮点尽力转换（17 位会丢精度，勿用于 grenades 帧）。"""
     s = str(v)
@@ -75,6 +98,12 @@ def _sid(v) -> str:
 
 
 def _xyz_dist(ax, ay, az, vx, vy, vz) -> float:
+=======
+def _xyz_dist(ax, ay, az, vx, vy, vz) -> float | None:
+    """欧氏距离（米）；任一坐标缺失（炸弹/世界击杀等）返回 None。"""
+    if None in (ax, ay, az, vx, vy, vz):
+        return None
+>>>>>>> feature/insights-v1
     return ((ax - vx) ** 2 + (ay - vy) ** 2 + (az - vz) ** 2) ** 0.5 * UNIT_TO_M
 
 
@@ -105,13 +134,13 @@ def analyze_deaths(kills, rounds, steam_id: int):
         no_support = r.get("assister_steamid") is None and not bool(r.get("victim_traded"))
         disadvantaged = bool(no_support) and (
             bool(r.get("thrusmoke")) or bool(r.get("attackerblind"))
-            or (r.get("weapon") in AWP_LIKE and dist_m > 15)
+            or (r.get("weapon") in AWP_LIKE and dist_m is not None and dist_m > 15)
         )
         events.append(DeathEvent(
             round_no=rn,
             tick=int(r["tick"]),
             killer_weapon=r.get("weapon"),
-            distance_m=round(dist_m, 1),
+            distance_m=round(dist_m, 1) if dist_m is not None else None,
             first_duel=(first_kill_tick.get(rn) == int(r["tick"])),
             teammate_support=not no_support,
             disadvantaged_position=bool(disadvantaged),
@@ -120,7 +149,9 @@ def analyze_deaths(kills, rounds, steam_id: int):
         ))
     buckets: dict[str, dict] = {}
     for e in events:
-        b = distance_bucket(e.distance_m or 99)
+        if e.distance_m is None:  # 炸弹/世界击杀无坐标，不入距离桶
+            continue
+        b = distance_bucket(e.distance_m)
         buckets.setdefault(b, {"deaths": 0})
         buckets[b]["deaths"] += 1
     disadvantaged_rate = (
@@ -141,6 +172,8 @@ def analyze_duels(kills, steam_id: int) -> DuelDim:
     for r in involved.to_dicts():
         dist_m = _xyz_dist(r.get("attacker_x"), r.get("attacker_y"), r.get("attacker_z"),
                            r.get("victim_x"), r.get("victim_y"), r.get("victim_z"))
+        if dist_m is None:  # 炸弹/世界击杀不可定位，不入对枪矩阵
+            continue
         wclass = weapon_class(r.get("weapon"))
         bucket = distance_bucket(dist_m)
         key = (bucket, wclass)
@@ -157,18 +190,110 @@ def analyze_duels(kills, steam_id: int) -> DuelDim:
     return DuelDim(by_weapon_distance=by_wd)
 
 
+def analyze_duels_damage(damages, kills, steam_id: int) -> tuple[float | None, float | None]:
+    """damages 交火口径（1.1 近似）：击杀事件为窗界，user 参与且双方互伤的交火窗结算。
+
+    - first_strike_win_rate：user 先手（窗口内首个伤害出自 user）且分出胜负的窗口中 user 胜率；
+    - mirror_win_rate：双方武器类相同（各取其造成伤害的武器类）且分出胜负的窗口中 user 胜率；
+    - 无击杀结算的互伤窗口不计入分母；样本为 0 时返回 None。
+    """
+    dmg = damages.filter(
+        col("attacker_steamid").is_not_null() & col("victim_steamid").is_not_null()
+    ).to_dicts() if damages.height else []
+    kill_rows = [k for k in kills.to_dicts() if k.get("tick") is not None]
+    kill_ticks = sorted(int(k["tick"]) for k in kill_rows)
+    events = sorted(dmg, key=lambda r: int(r["tick"]))
+
+    # 切窗：kill tick 为窗界（同 tick 伤害属被击杀收尾的窗口）
+    windows: list[tuple[list[dict], int, int]] = []  # (events, start_tick, end_tick)
+    cur: list[dict] = []
+    cur_start = 0
+    ki = 0
+    for e in events:
+        tick = int(e["tick"])
+        while ki < len(kill_ticks) and kill_ticks[ki] < tick:
+            if cur:
+                windows.append((cur, cur_start, kill_ticks[ki]))
+                cur = []
+            cur_start = kill_ticks[ki]
+            ki += 1
+        if not cur:
+            cur_start = tick
+        cur.append(e)
+    end_tick = kill_ticks[-1] if kill_ticks and kill_ticks[-1] >= cur_start else (int(events[-1]["tick"]) if events else 0)
+    if cur:
+        windows.append((cur, cur_start, end_tick))
+
+    fs_wins = fs_total = 0
+    mirror_wins = mirror_total = 0
+    for win_events, w_start, w_end in windows:
+        # 按无序对分组，只看 user 参与且双方互伤的
+        by_pair: dict[tuple[int, int], list[dict]] = {}
+        for e in win_events:
+            a, v = int(e["attacker_steamid"]), int(e["victim_steamid"])
+            if a == v:
+                continue
+            by_pair.setdefault(tuple(sorted((a, v))), []).append(e)
+        for (ida, idb), evs in by_pair.items():
+            if steam_id not in (ida, idb):
+                continue
+            other = idb if steam_id == ida else ida
+            attackers = {int(e["attacker_steamid"]) for e in evs}
+            if not attackers >= {steam_id, other}:  # 非互伤（单方面输出）不计
+                continue
+            first = int(evs[0]["attacker_steamid"])  # evs 已按 tick 有序
+            # 结局：窗口内 user/other 之间的击杀
+            outcome = None
+            for k in kill_rows:
+                kt = int(k["tick"])
+                if kt < w_start or kt > w_end:
+                    continue
+                ka, kv = k.get("attacker_steamid"), k.get("victim_steamid")
+                if {ka, kv} == {steam_id, other}:
+                    outcome = "win" if ka == steam_id else "lose"
+            if outcome is None:
+                continue
+            mine_class = next((weapon_class(e["weapon"]) for e in evs if int(e["attacker_steamid"]) == steam_id), "other")
+            other_class = next((weapon_class(e["weapon"]) for e in evs if int(e["attacker_steamid"]) == other), "other")
+            if first == steam_id:
+                fs_total += 1
+                fs_wins += outcome == "win"
+            if mine_class == other_class:
+                mirror_total += 1
+                mirror_wins += outcome == "win"
+
+    fs_rate = round(fs_wins / fs_total, 3) if fs_total else None
+    mirror_rate = round(mirror_wins / mirror_total, 3) if mirror_total else None
+    return fs_rate, mirror_rate
+
+
 def analyze_economy(demo, kills, rounds, steam_id: int, user_side: str | None) -> EconomyDim:
-    """经济：回合 buy_type 分布 + 首杀转化率（首版：有效购买比例留 null）。"""
+    """经济：回合 buy_type 分布 + 首杀转化率 + 经济模式（1.1）。
+
+    - eco_win_rate：eco/force 回合胜率（经济抗压能力）；
+    - full_buy_lose_rate：full buy 回合败率（资源转化能力）；
+    - effective_buy_ratio 保持 None（awpy 无总资金列）。
+    """
     economy = demo.round_economy
     buys: list[BuyDecision] = []
+    eco_wins = eco_total = full_losses = full_total = 0
     if user_side:
         mine = economy.filter(col("side") == user_side).to_dicts()
+        win_map = {int(r["round_num"]): r.get("winner_side") for r in rounds.to_dicts()}
         for r in mine:
+            buy = r.get("buy_type")
+            won = win_map.get(int(r["round_num"])) == user_side
+            if buy in ("eco", "force"):
+                eco_total += 1
+                eco_wins += 1 if won else 0
+            elif buy == "full":
+                full_total += 1
+                full_losses += 0 if won else 1
             buys.append(BuyDecision(
                 round_no=int(r["round_num"]),
-                buy=r.get("buy_type"),
+                buy=buy,
                 equip_value=int(r.get("equipment_value") or 0),
-                effective=None,  # 有效购买口径二期（需总资金列）
+                effective=None,  # 有效购买口径需总资金列（awpy 未提供）
             ))
     # 首杀转化：回合首个击杀的 attacker 阵营 == user_side → 该回合 winner_side 是否 == user_side
     first_kills: dict[int, tuple[int, str]] = {}
@@ -187,9 +312,12 @@ def analyze_economy(demo, kills, rounds, steam_id: int, user_side: str | None) -
         buy_decisions=buys,
         effective_buy_ratio=None,
         first_kill_conversion=round(conversion, 3) if conversion is not None else None,
+        eco_win_rate=round(eco_wins / eco_total, 3) if eco_total else None,
+        full_buy_lose_rate=round(full_losses / full_total, 3) if full_total else None,
     )
 
 
+<<<<<<< HEAD
 GRENADE_PRICES = {"smoke": 300, "flash": 200, "molotov": 400, "incendiary": 600, "he": 300, "decoy": 50}
 GRENADE_TYPES = {"smoke", "flash", "molotov", "incendiary", "he", "decoy"}
 
@@ -311,6 +439,57 @@ def compute_server_ratings(players_v1: list[dict], utility_players: list[Utility
 
 def analyze_utility(demo, grenades, steam_id: int, user_entity_ids: set[int]) -> UtilityDim:
     """道具：投掷清单（按 entity_id 去重——grenades 帧是逐 tick 轨迹，非事件）+ 闪光浪费率 + 致盲中位数。"""
+=======
+def collect_utility_spots(demo, steam_id: int, user_side: str | None) -> list[UtilitySpot]:
+    """道具落点采集（1.1）：user 侧烟/火落点 + 与 user 相关的致盲被闪位置（雷达散点数据源）。"""
+    spots: list[UtilitySpot] = []
+
+    def add(kind: str, rows, x_key: str, y_key: str, side_key: str | None = None, side_val: str | None = None):
+        for r in rows:
+            x, y = r.get(x_key), r.get(y_key)
+            if x is None or y is None:
+                continue
+            spots.append(UtilitySpot(
+                kind=kind, x=float(x), y=float(y),
+                start_tick=int(r["start_tick"]) if r.get("start_tick") is not None else None,
+                end_tick=int(r["end_tick"]) if r.get("end_tick") is not None else None,
+                side=(r.get(side_key) if side_key else side_val),
+            ))
+
+    if user_side:
+        smokes = getattr(demo, "smokes", None)
+        if smokes is not None and smokes.height:
+            add("smoke", smokes.filter(col("thrower_side") == user_side).to_dicts(), "x", "y", "thrower_side")
+        fires = getattr(demo, "fires", None)
+        if fires is not None and fires.height:
+            add("fire", fires.filter(col("thrower_side") == user_side).to_dicts(), "x", "y", "thrower_side")
+    blinds = getattr(demo, "blinds", None)
+    if blinds is not None and blinds.height:
+        mine = blinds.filter(
+            (col("attacker_steamid") == steam_id) | (col("victim_steamid") == steam_id)
+        ).to_dicts()
+        for r in mine:
+            x, y = r.get("victim_x"), r.get("victim_y")
+            if x is None or y is None:
+                continue
+            spots.append(UtilitySpot(
+                kind="blind", x=float(x), y=float(y),
+                start_tick=int(r["duration"] * TICK_RATE) if r.get("duration") is not None else None,
+                side=r.get("victim_side"),
+            ))
+    return spots
+
+
+def analyze_utility(demo, grenades, steam_id: int) -> UtilityDim:
+    """道具：投掷清单（按 entity_id 去重——grenades 帧是逐 tick 轨迹，非事件）+ awpy blinds 敌友拆分 + 闪光浪费率。
+
+    1.1 口径：blinds 数据集 attacker=投掷者、victim=被致盲者。
+    - victim_side != attacker_side → 敌方致盲（有效），累计 enemy_blind_s；
+    - victim_side == attacker_side 且 victim != attacker → 队友致盲（失误），累计 team_blind_s；
+    - 自闪（victim == attacker）不计入任一侧；duration <= 0.1s 视为擦过不计入。
+    - blind_median_s 取敌方致盲时长的真中位数（偶数个取中间两数均值）。
+    """
+>>>>>>> feature/insights-v1
     my = (
         grenades.filter(col("thrower_steamid") == steam_id)
         .unique(subset=["entity_id"])
@@ -318,31 +497,63 @@ def analyze_utility(demo, grenades, steam_id: int, user_entity_ids: set[int]) ->
     )
     throws = [ThrowEvent(round_no=None, grenade_type=r.get("type"), effective=None) for r in my]
 
-    blind_seconds: list[float] = []
-    flash_thrown = 0
-    flash_effective = 0
-    try:
-        from demoparser2 import DemoParser
+    enemy_durs: list[float] = []
+    enemy_blind_s = 0.0
+    team_blind_s = 0.0
+    blinds = getattr(demo, "blinds", None)
+    if blinds is not None and blinds.height:
+        for r in blinds.filter(col("attacker_steamid") == steam_id).to_dicts():
+            dur = float(r.get("duration") or 0)
+            if dur <= 0.1 or r.get("victim_steamid") == steam_id:
+                continue
+            if r.get("victim_side") == r.get("attacker_side"):
+                team_blind_s += dur
+            else:
+                enemy_blind_s += dur
+                enemy_durs.append(dur)
 
-        blind = DemoParser(str(demo.path)).parse_event("player_blind", other=["attacker_steamid", "user_steamid"])
-        if len(blind):
-            mine = blind[blind["attacker_steamid"].astype("string") == str(steam_id)]
-            vals = [float(x) for x in mine["blind_duration"].tolist() if float(x) > 0.1]
-            blind_seconds = vals
-            flash_thrown = sum(1 for t in throws if (t.grenade_type or "").lower() in ("flashbang", "flash"))
-            flash_effective = len([s for s in blind_seconds if s > 0.5]) if flash_thrown else 0
-    except Exception as exc:  # noqa: BLE001
-        logger.warning(f"[demo解析] player_blind 提取失败（致盲指标留 null）：{exc}")
-
-    blind_median = sorted(blind_seconds)[len(blind_seconds) // 2] if blind_seconds else None
+    flash_thrown = sum(1 for t in throws if (t.grenade_type or "").lower() in ("flashbang", "flash"))
+    flash_effective = len([d for d in enemy_durs if d > 0.5]) if flash_thrown else 0
+    blind_median = statistics.median(enemy_durs) if enemy_durs else None
     waste_rate = (
         round(max(0, flash_thrown - flash_effective) / flash_thrown, 3)
         if flash_thrown else None
     )
+
+    # 分道具购买 vs 使用（1.1）：purchase 次数 × 实际投掷数
+    thrown_by_type: dict[str, int] = {}
+    for t in throws:
+        gtype = t.grenade_type or "unknown"
+        thrown_by_type[gtype] = thrown_by_type.get(gtype, 0) + 1
+    bought_by_type: dict[str, int] = {}
+    item_events = getattr(demo, "item_events", None)
+    if item_events is not None and item_events.height:
+        buys = item_events.filter(
+            (col("action") == "purchase") & (col("steamid") == steam_id)
+        ).to_dicts()
+        for r in buys:
+            gtype = PURCHASE_ITEM_TO_GRENADE.get((r.get("item") or "").lower())
+            if gtype:
+                bought_by_type[gtype] = bought_by_type.get(gtype, 0) + 1
+    usage = []
+    for gtype in sorted(set(bought_by_type) | set(thrown_by_type)):
+        bought = bought_by_type.get(gtype, 0)
+        thrown = thrown_by_type.get(gtype, 0)
+        if bought > 0:
+            w = round(max(0, bought - thrown) / bought, 3)
+        elif thrown > 0:  # 捡漏（别人掉的/死后捡的）：不算浪费
+            w = 0.0
+        else:
+            w = None
+        usage.append(GrenadeUsage(grenade_type=gtype, bought=bought, thrown=thrown, waste_rate=w))
+
     return UtilityDim(
         throws=throws,
         blind_median_s=round(blind_median, 2) if blind_median is not None else None,
         waste_rate=waste_rate,
+        enemy_blind_s=round(enemy_blind_s, 2),
+        team_blind_s=round(team_blind_s, 2),
+        usage=usage,
     )
 
 
@@ -365,10 +576,19 @@ def run_analysis(dem_path, match_id: str, steam_id: str) -> tuple[FourDimAnalysi
 
         deaths_dim, _events = analyze_deaths(kills, rounds, sid)
         duels_dim = analyze_duels(kills, sid)
+        fs_rate, mirror_rate = analyze_duels_damage(demo.damages, kills, sid)
+        duels_dim.first_strike_win_rate = fs_rate
+        duels_dim.mirror_win_rate = mirror_rate
         economy_dim = analyze_economy(demo, kills, rounds, sid, user_side)
+<<<<<<< HEAD
         utility_players = analyze_utility_players(demo, grenades, demo.damages, kills)
         utility_dim = analyze_utility(demo, grenades, sid, set())
         utility_dim.players = utility_players
+=======
+        utility_dim = analyze_utility(demo, grenades, sid)
+        utility_dim.spots = collect_utility_spots(demo, sid, user_side)
+        highlights = detect_highlights(kills, rounds, sid, user_side)
+>>>>>>> feature/insights-v1
 
         analysis = FourDimAnalysis(
             match_id=match_id,
@@ -376,6 +596,7 @@ def run_analysis(dem_path, match_id: str, steam_id: str) -> tuple[FourDimAnalysi
             economy=economy_dim,
             utility=utility_dim,
             duels=duels_dim,
+            highlights=highlights,
             meta=AnalysisMeta(parser="awpy 3.3.0"),
         )
     finally:
