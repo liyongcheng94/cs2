@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import httpx
 
-from ..config import get_project_root
 from ..database import SessionDep
 from ..services import settings_service
 
@@ -16,7 +16,9 @@ PROVIDER_BASE_URLS = {
     "ollama": "http://127.0.0.1:11434/v1",
 }
 
-PROMPT_DIR = get_project_root() / "backend" / "app" / "ai_skills"
+# prompt 资产目录：模块相对（services/ 上一级即 app/），不依赖仓库根假设——
+# 容器内 WORKDIR=/app 时 parents[2]=/ 曾算出 /backend/app/ai_skills（不存在）→ load_prompt 返回空
+PROMPT_DIR = Path(__file__).resolve().parents[1] / "ai_skills"
 
 
 class AiError(Exception):
