@@ -161,6 +161,7 @@ async def bili_learn_handler(task: Task, session_factory_fn: Callable[[], Sessio
                         grenade_type=c.get("grenade_type"), stance=c.get("stance"),
                         timing=c.get("timing"), video_ts=c.get("video_ts"), bvid=bv,
                         content_md=c.get("content_md", ""), source_hash=chash,
+                        zone=c.get("zone"),
                     ))
             s.commit()
 

@@ -53,5 +53,21 @@ def list_grenades(session: SessionDep, map_name: str = "", grenade_type: str = "
             "video_ts": r.video_ts,
             "bvid": r.bvid,
             "content_md": r.content_md,
+            "zone": r.zone,
+            "favorited": bool(r.favorited),
         })
     return out
+
+
+@router.patch("/grenades/{card_id}/favorite")
+def patch_favorite(card_id: int, body: dict, session: SessionDep) -> dict:
+    """收藏/取消收藏（grill-me v2 决策 1d：★角标 + 收藏置顶）。"""
+    from fastapi import HTTPException
+
+    card = session.get(GrenadeCard, card_id)
+    if card is None:
+        raise HTTPException(status_code=404, detail="道具卡不存在")
+    card.favorited = bool(body.get("favorited"))
+    session.add(card)
+    session.commit()
+    return {"id": card.id, "favorited": card.favorited}

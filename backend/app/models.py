@@ -143,6 +143,8 @@ class GrenadeCard(SQLModel, table=True):
     content_md: str = ""
     source_hash: str = Field(unique=True, index=True)
     mv_uuid: str | None = None
+    zone: str | None = Field(default=None, index=True)  # A区/B区/中路/出生点（AI 输出，前端正则兜底）
+    favorited: bool = Field(default=False)  # 用户收藏（★），列表收藏置顶
     created_at: datetime = Field(default_factory=utcnow, sa_type=NAIVE_DT)
 
 

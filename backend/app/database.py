@@ -36,6 +36,9 @@ _MIGRATIONS = [
     "ALTER TABLE matchstat ADD COLUMN we REAL",
     "ALTER TABLE match ADD COLUMN detail_json JSON",
     "ALTER TABLE bilivideo ADD COLUMN mv_uuid VARCHAR",
+    # 学道具 v2（2026-11-23 grill-me 八问共识）：分区列 + 收藏列（幂等：try/except 已存在则跳过）
+    "ALTER TABLE grenadecard ADD COLUMN zone VARCHAR",
+    "ALTER TABLE grenadecard ADD COLUMN favorited BOOLEAN DEFAULT 0",
 ]
 
 
