@@ -56,8 +56,10 @@ class BuyDecision(BaseModel):
 
 class EconomyDim(BaseModel):
     buy_decisions: list[BuyDecision] = Field(default_factory=list)
-    effective_buy_ratio: float | None = None  # 装备价值 / 总资金
+    effective_buy_ratio: float | None = None  # 装备价值 / 总资金（无总资金列，留 null）
     first_kill_conversion: float | None = None  # 首杀方赢下该回合的概率
+    eco_win_rate: float | None = None  # 1.1：eco/force 回合胜率（经济抗压能力）
+    full_buy_lose_rate: float | None = None  # 1.1：full buy 回合败率（资源转化能力）
 
 
 class ThrowEvent(BaseModel):

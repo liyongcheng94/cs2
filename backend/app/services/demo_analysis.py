@@ -160,17 +160,32 @@ def analyze_duels(kills, steam_id: int) -> DuelDim:
 
 
 def analyze_economy(demo, kills, rounds, steam_id: int, user_side: str | None) -> EconomyDim:
-    """经济：回合 buy_type 分布 + 首杀转化率（首版：有效购买比例留 null）。"""
+    """经济：回合 buy_type 分布 + 首杀转化率 + 经济模式（1.1）。
+
+    - eco_win_rate：eco/force 回合胜率（经济抗压能力）；
+    - full_buy_lose_rate：full buy 回合败率（资源转化能力）；
+    - effective_buy_ratio 保持 None（awpy 无总资金列）。
+    """
     economy = demo.round_economy
     buys: list[BuyDecision] = []
+    eco_wins = eco_total = full_losses = full_total = 0
     if user_side:
         mine = economy.filter(col("side") == user_side).to_dicts()
+        win_map = {int(r["round_num"]): r.get("winner_side") for r in rounds.to_dicts()}
         for r in mine:
+            buy = r.get("buy_type")
+            won = win_map.get(int(r["round_num"])) == user_side
+            if buy in ("eco", "force"):
+                eco_total += 1
+                eco_wins += 1 if won else 0
+            elif buy == "full":
+                full_total += 1
+                full_losses += 0 if won else 1
             buys.append(BuyDecision(
                 round_no=int(r["round_num"]),
-                buy=r.get("buy_type"),
+                buy=buy,
                 equip_value=int(r.get("equipment_value") or 0),
-                effective=None,  # 有效购买口径二期（需总资金列）
+                effective=None,  # 有效购买口径需总资金列（awpy 未提供）
             ))
     # 首杀转化：回合首个击杀的 attacker 阵营 == user_side → 该回合 winner_side 是否 == user_side
     first_kills: dict[int, tuple[int, str]] = {}
@@ -189,6 +204,8 @@ def analyze_economy(demo, kills, rounds, steam_id: int, user_side: str | None) -
         buy_decisions=buys,
         effective_buy_ratio=None,
         first_kill_conversion=round(conversion, 3) if conversion is not None else None,
+        eco_win_rate=round(eco_wins / eco_total, 3) if eco_total else None,
+        full_buy_lose_rate=round(full_losses / full_total, 3) if full_total else None,
     )
 
 
