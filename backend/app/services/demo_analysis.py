@@ -159,6 +159,83 @@ def analyze_duels(kills, steam_id: int) -> DuelDim:
     return DuelDim(by_weapon_distance=by_wd)
 
 
+def analyze_duels_damage(damages, kills, steam_id: int) -> tuple[float | None, float | None]:
+    """damages 交火口径（1.1 近似）：击杀事件为窗界，user 参与且双方互伤的交火窗结算。
+
+    - first_strike_win_rate：user 先手（窗口内首个伤害出自 user）且分出胜负的窗口中 user 胜率；
+    - mirror_win_rate：双方武器类相同（各取其造成伤害的武器类）且分出胜负的窗口中 user 胜率；
+    - 无击杀结算的互伤窗口不计入分母；样本为 0 时返回 None。
+    """
+    dmg = damages.filter(
+        col("attacker_steamid").is_not_null() & col("victim_steamid").is_not_null()
+    ).to_dicts() if damages.height else []
+    kill_rows = [k for k in kills.to_dicts() if k.get("tick") is not None]
+    kill_ticks = sorted(int(k["tick"]) for k in kill_rows)
+    events = sorted(dmg, key=lambda r: int(r["tick"]))
+
+    # 切窗：kill tick 为窗界（同 tick 伤害属被击杀收尾的窗口）
+    windows: list[tuple[list[dict], int, int]] = []  # (events, start_tick, end_tick)
+    cur: list[dict] = []
+    cur_start = 0
+    ki = 0
+    for e in events:
+        tick = int(e["tick"])
+        while ki < len(kill_ticks) and kill_ticks[ki] < tick:
+            if cur:
+                windows.append((cur, cur_start, kill_ticks[ki]))
+                cur = []
+            cur_start = kill_ticks[ki]
+            ki += 1
+        if not cur:
+            cur_start = tick
+        cur.append(e)
+    end_tick = kill_ticks[-1] if kill_ticks and kill_ticks[-1] >= cur_start else (int(events[-1]["tick"]) if events else 0)
+    if cur:
+        windows.append((cur, cur_start, end_tick))
+
+    fs_wins = fs_total = 0
+    mirror_wins = mirror_total = 0
+    for win_events, w_start, w_end in windows:
+        # 按无序对分组，只看 user 参与且双方互伤的
+        by_pair: dict[tuple[int, int], list[dict]] = {}
+        for e in win_events:
+            a, v = int(e["attacker_steamid"]), int(e["victim_steamid"])
+            if a == v:
+                continue
+            by_pair.setdefault(tuple(sorted((a, v))), []).append(e)
+        for (ida, idb), evs in by_pair.items():
+            if steam_id not in (ida, idb):
+                continue
+            other = idb if steam_id == ida else ida
+            attackers = {int(e["attacker_steamid"]) for e in evs}
+            if not attackers >= {steam_id, other}:  # 非互伤（单方面输出）不计
+                continue
+            first = int(evs[0]["attacker_steamid"])  # evs 已按 tick 有序
+            # 结局：窗口内 user/other 之间的击杀
+            outcome = None
+            for k in kill_rows:
+                kt = int(k["tick"])
+                if kt < w_start or kt > w_end:
+                    continue
+                ka, kv = k.get("attacker_steamid"), k.get("victim_steamid")
+                if {ka, kv} == {steam_id, other}:
+                    outcome = "win" if ka == steam_id else "lose"
+            if outcome is None:
+                continue
+            mine_class = next((weapon_class(e["weapon"]) for e in evs if int(e["attacker_steamid"]) == steam_id), "other")
+            other_class = next((weapon_class(e["weapon"]) for e in evs if int(e["attacker_steamid"]) == other), "other")
+            if first == steam_id:
+                fs_total += 1
+                fs_wins += outcome == "win"
+            if mine_class == other_class:
+                mirror_total += 1
+                mirror_wins += outcome == "win"
+
+    fs_rate = round(fs_wins / fs_total, 3) if fs_total else None
+    mirror_rate = round(mirror_wins / mirror_total, 3) if mirror_total else None
+    return fs_rate, mirror_rate
+
+
 def analyze_economy(demo, kills, rounds, steam_id: int, user_side: str | None) -> EconomyDim:
     """经济：回合 buy_type 分布 + 首杀转化率 + 经济模式（1.1）。
 
@@ -304,6 +381,9 @@ def run_analysis(dem_path, match_id: str, steam_id: str) -> tuple[FourDimAnalysi
 
         deaths_dim, _events = analyze_deaths(kills, rounds, sid)
         duels_dim = analyze_duels(kills, sid)
+        fs_rate, mirror_rate = analyze_duels_damage(demo.damages, kills, sid)
+        duels_dim.first_strike_win_rate = fs_rate
+        duels_dim.mirror_win_rate = mirror_rate
         economy_dim = analyze_economy(demo, kills, rounds, sid, user_side)
         utility_dim = analyze_utility(demo, grenades, sid)
 
