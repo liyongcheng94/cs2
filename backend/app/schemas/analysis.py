@@ -70,7 +70,6 @@ class ThrowEvent(BaseModel):
     blind_seconds: float | None = None
 
 
-<<<<<<< HEAD
 class UtilityPlayer(BaseModel):
     """单玩家道具统计（全场 10 人，道具分析 Tab 数据源）。"""
 
@@ -92,7 +91,8 @@ class ServerRatings(BaseModel):
 
     players: dict[str, dict[str, float]] = Field(default_factory=dict)  # playerId -> 六维
     averages: dict[str, float] = Field(default_factory=dict)  # 本场均值
-=======
+
+
 class UtilitySpot(BaseModel):
     """道具落点（1.1，雷达散点图数据源）：烟/火为落点，blind 为被闪者位置。"""
 
@@ -111,24 +111,18 @@ class GrenadeUsage(BaseModel):
     bought: int = 0  # item_events purchase 计数（按类型映射）
     thrown: int = 0  # grenades 实际投掷数（entity_id 去重）
     waste_rate: float | None = None  # bought>0: max(0, bought-thrown)/bought；捡漏（bought=0 且 thrown>0）记 0.0
->>>>>>> feature/insights-v1
 
 
 class UtilityDim(BaseModel):
     throws: list[ThrowEvent] = Field(default_factory=list)
-<<<<<<< HEAD
-    blind_median_s: float | None = None  # 致盲时长中位数（抗离群值）
-    waste_rate: float | None = None  # 未致盲/未造成伤害的投掷物占比
-    players: list[UtilityPlayer] = Field(default_factory=list)  # 全场玩家道具统计
-    server_ratings: ServerRatings | None = None  # 六维能力评分（服务器评价 Tab）
-=======
     blind_median_s: float | None = None  # 致盲敌方时长中位数（抗离群值；1.1 口径仅敌方）
     waste_rate: float | None = None  # 闪光浪费率：1 - 有效闪（敌方致盲>0.5s 数）/ 闪光投掷数
     enemy_blind_s: float | None = None  # 1.1：致盲敌方累计秒数（>0.1s 计入，自闪排除）
     team_blind_s: float | None = None  # 1.1：致盲队友累计秒数（>0.1s 计入，自闪排除）
     usage: list[GrenadeUsage] = Field(default_factory=list)  # 1.1：分道具购买 vs 使用
     spots: list[UtilitySpot] = Field(default_factory=list)  # 1.1：道具落点（雷达散点）
->>>>>>> feature/insights-v1
+    players: list[UtilityPlayer] = Field(default_factory=list)  # 全场玩家道具统计
+    server_ratings: ServerRatings | None = None  # 六维能力评分（服务器评价 Tab）
 
 
 class AnalysisMeta(BaseModel):
@@ -159,6 +153,7 @@ class FourDimAnalysis(BaseModel):
     utility: UtilityDim = Field(default_factory=UtilityDim)
     duels: DuelDim = Field(default_factory=DuelDim)
     highlights: list[HighlightMoment] = Field(default_factory=list)  # 1.1：TopN 可看性时刻
+    server_ratings: ServerRatings | None = None  # 六维能力评分（demo_analyze 拉到 v1 数据后回填）
     meta: AnalysisMeta = Field(
         default_factory=lambda: AnalysisMeta(parser="unknown")
     )

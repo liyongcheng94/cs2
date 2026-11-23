@@ -12,11 +12,8 @@
 """
 from __future__ import annotations
 
-<<<<<<< HEAD
 import re
-=======
 import statistics
->>>>>>> feature/insights-v1
 import time
 import tracemalloc
 
@@ -36,12 +33,9 @@ from ..schemas.analysis import (
     SCHEMA_VERSION,
     ThrowEvent,
     UtilityDim,
-<<<<<<< HEAD
     UtilityPlayer,
     ServerRatings,
-=======
     UtilitySpot,
->>>>>>> feature/insights-v1
 )
 from .highlight import detect_highlights
 
@@ -85,7 +79,6 @@ def distance_bucket(dist_m: float) -> str:
     return "15m+"
 
 
-<<<<<<< HEAD
 def _sid(v) -> str:
     """steamid 归一化：字符串直接返回（保精度），浮点尽力转换（17 位会丢精度，勿用于 grenades 帧）。"""
     s = str(v)
@@ -97,13 +90,10 @@ def _sid(v) -> str:
         return s
 
 
-def _xyz_dist(ax, ay, az, vx, vy, vz) -> float:
-=======
 def _xyz_dist(ax, ay, az, vx, vy, vz) -> float | None:
     """欧氏距离（米）；任一坐标缺失（炸弹/世界击杀等）返回 None。"""
     if None in (ax, ay, az, vx, vy, vz):
         return None
->>>>>>> feature/insights-v1
     return ((ax - vx) ** 2 + (ay - vy) ** 2 + (az - vz) ** 2) ** 0.5 * UNIT_TO_M
 
 
@@ -317,7 +307,6 @@ def analyze_economy(demo, kills, rounds, steam_id: int, user_side: str | None) -
     )
 
 
-<<<<<<< HEAD
 GRENADE_PRICES = {"smoke": 300, "flash": 200, "molotov": 400, "incendiary": 600, "he": 300, "decoy": 50}
 GRENADE_TYPES = {"smoke", "flash", "molotov", "incendiary", "he", "decoy"}
 
@@ -437,9 +426,6 @@ def compute_server_ratings(players_v1: list[dict], utility_players: list[Utility
     return ServerRatings(players=players_out, averages=averages)
 
 
-def analyze_utility(demo, grenades, steam_id: int, user_entity_ids: set[int]) -> UtilityDim:
-    """道具：投掷清单（按 entity_id 去重——grenades 帧是逐 tick 轨迹，非事件）+ 闪光浪费率 + 致盲中位数。"""
-=======
 def collect_utility_spots(demo, steam_id: int, user_side: str | None) -> list[UtilitySpot]:
     """道具落点采集（1.1）：user 侧烟/火落点 + 与 user 相关的致盲被闪位置（雷达散点数据源）。"""
     spots: list[UtilitySpot] = []
@@ -489,7 +475,6 @@ def analyze_utility(demo, grenades, steam_id: int) -> UtilityDim:
     - 自闪（victim == attacker）不计入任一侧；duration <= 0.1s 视为擦过不计入。
     - blind_median_s 取敌方致盲时长的真中位数（偶数个取中间两数均值）。
     """
->>>>>>> feature/insights-v1
     my = (
         grenades.filter(col("thrower_steamid") == steam_id)
         .unique(subset=["entity_id"])
@@ -580,15 +565,11 @@ def run_analysis(dem_path, match_id: str, steam_id: str) -> tuple[FourDimAnalysi
         duels_dim.first_strike_win_rate = fs_rate
         duels_dim.mirror_win_rate = mirror_rate
         economy_dim = analyze_economy(demo, kills, rounds, sid, user_side)
-<<<<<<< HEAD
         utility_players = analyze_utility_players(demo, grenades, demo.damages, kills)
-        utility_dim = analyze_utility(demo, grenades, sid, set())
-        utility_dim.players = utility_players
-=======
         utility_dim = analyze_utility(demo, grenades, sid)
+        utility_dim.players = utility_players
         utility_dim.spots = collect_utility_spots(demo, sid, user_side)
         highlights = detect_highlights(kills, rounds, sid, user_side)
->>>>>>> feature/insights-v1
 
         analysis = FourDimAnalysis(
             match_id=match_id,

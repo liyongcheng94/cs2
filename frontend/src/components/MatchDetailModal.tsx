@@ -7,6 +7,7 @@ import { apiGet } from "../api/client";
 import * as echarts from "echarts";
 import type { FourDimAnalysisShape, MatchDetail } from "../types";
 import { DeathScatter } from "./DeathScatter";
+import { UtilityScatter } from "./UtilityScatter";
 import { DuelHeatmap } from "./DuelHeatmap";
 
 const { Text } = Typography;
@@ -149,7 +150,7 @@ function Inner({ detail }: { detail: MatchDetail }) {
           { key: "duels", label: "对枪矩阵", children: <DuelHeatmap analysis={detail.analysis} /> },
           { key: "util", label: "道具分析", children: <UtilityTab detail={detail} /> },
           { key: "ratings", label: "服务器评价", children: <RatingsTab detail={detail} /> },
-          { key: "radar", label: "死亡雷达", children: <DeathScatter analysis={detail.analysis} mapEn={mapEn} /> },
+          { key: "radar", label: "死亡雷达", children: <div><DeathScatter analysis={detail.analysis} mapEn={mapEn} /><UtilityScatter analysis={detail.analysis} mapEn={mapEn} /></div> },
           { key: "ai", label: "AI 复盘", children: <ReviewTab matchId={m.id} /> },
         ]}
       />

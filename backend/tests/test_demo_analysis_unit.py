@@ -7,15 +7,12 @@ from app.services.demo_analysis import (
     _round_of_tick,
     analyze_deaths,
     analyze_duels,
-<<<<<<< HEAD
     analyze_utility_players,
     compute_server_ratings,
-=======
     analyze_duels_damage,
     analyze_economy,
     analyze_utility,
     collect_utility_spots,
->>>>>>> feature/insights-v1
     distance_bucket,
     weapon_class,
 )
@@ -134,7 +131,6 @@ def test_analyze_deaths_disadvantaged_approximation():
     assert dim.disadvantaged_rate == 1.0
 
 
-<<<<<<< HEAD
 def test_utility_players_full_pipeline():
     """
     Given 真实 demo（客户端缓存解压产物）
@@ -180,7 +176,6 @@ def test_compute_server_ratings_shape():
         for dim, v in dims.items():
             assert 0 <= v <= 100, (pid, dim, v)
     assert len(ratings.averages) == 6
-=======
 def _item_events_frame(rows):
     cols = ["tick", "action", "steamid", "item", "cost"]
     data = {c: [] for c in cols}
@@ -462,4 +457,3 @@ def test_collect_utility_spots_filters_by_side():
     assert len(smokes) == 2 and {s.x for s in smokes} == {100.0, 300.0}
     assert len(fires) == 1 and fires[0].x == 500.0
     assert len(blinds) == 2 and {b.y for b in blinds} == {800.0, 1000.0}
->>>>>>> feature/insights-v1

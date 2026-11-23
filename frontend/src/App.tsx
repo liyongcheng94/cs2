@@ -20,13 +20,7 @@ import {
   Typography,
 } from "antd";
 import { apiGet, apiPost, apiPut } from "./api/client";
-<<<<<<< HEAD
-=======
-import { DeathScatter } from "./components/DeathScatter";
-import { UtilityScatter } from "./components/UtilityScatter";
 import { LongTermTrends } from "./components/LongTermTrends";
-import { DuelHeatmap } from "./components/DuelHeatmap";
->>>>>>> feature/insights-v1
 import { CoachChat } from "./components/CoachChat";
 import { SeasonTrends } from "./components/SeasonTrends";
 import { WanmeiLogin } from "./components/WanmeiLogin";
@@ -231,128 +225,8 @@ function MatchesPage() {
         columns={columns}
         pagination={{ pageSize: 15 }}
       />
-<<<<<<< HEAD
       <MatchDetailModal open={detailId !== null} detail={detail.data ?? null} onClose={() => setDetailId(null)} />
-=======
-      <Drawer
-        title="对局详情"
-        width={640}
-        open={detailId !== null}
-        onClose={() => setDetailId(null)}
-      >
-        {detail.data ? (
-          <Space direction="vertical" style={{ width: "100%" }}>
-            {detail.data.report ? (
-              <Alert
-                type={detail.data.report.pushed ? "success" : "warning"}
-                message={`复盘：${detail.data.report.title}`}
-                description={detail.data.report.pushed ? "已推送 MindVault" : "未推送"}
-              />
-            ) : null}
-            {detail.data.analysis ? (
-              <>
-                <DuelHeatmap analysis={detail.data.analysis} />
-                <DeathScatter analysis={detail.data.analysis} mapEn={detail.data.match.map_en} />
-                <UtilityScatter analysis={detail.data.analysis} mapEn={detail.data.match.map_en} />
-                <Row gutter={16}>
-                  {detail.data.analysis.deaths?.disadvantaged_rate != null ? (
-                    <Col span={8}><Statistic title="劣势枪位死亡率" value={(detail.data.analysis.deaths.disadvantaged_rate * 100).toFixed(0) + "%"} /></Col>
-                  ) : null}
-                  {detail.data.analysis.utility?.blind_median_s != null ? (
-                    <Col span={8}><Statistic title="致盲时长中位数" value={detail.data.analysis.utility.blind_median_s + "s"} /></Col>
-                  ) : null}
-                  {detail.data.analysis.economy?.first_kill_conversion != null ? (
-                    <Col span={8}><Statistic title="首杀转化率" value={(detail.data.analysis.economy.first_kill_conversion * 100).toFixed(0) + "%"} /></Col>
-                  ) : null}
-                </Row>
-                {detail.data.analysis.utility?.enemy_blind_s != null ? (
-                  <Row gutter={16}>
-                    <Col span={8}><Statistic title="致盲敌方(有效)" value={detail.data.analysis.utility.enemy_blind_s.toFixed(1) + "s"} /></Col>
-                    <Col span={8}><Statistic title="致盲队友(失误)" value={(detail.data.analysis.utility.team_blind_s ?? 0).toFixed(1) + "s"} /></Col>
-                  </Row>
-                ) : null}
-                {detail.data.analysis.utility?.usage?.length ? (
-                  <Table
-                    size="small"
-                    pagination={false}
-                    rowKey="grenade_type"
-                    dataSource={detail.data.analysis.utility.usage}
-                    columns={[
-                      { title: "道具", dataIndex: "grenade_type", width: 100 },
-                      { title: "购买", dataIndex: "bought", width: 70 },
-                      { title: "投掷", dataIndex: "thrown", width: 70 },
-                      {
-                        title: "买了没扔",
-                        dataIndex: "waste_rate",
-                        render: (v: number | null) =>
-                          v == null ? "—" : (
-                            <span style={{ color: v >= 0.3 ? "#cf1322" : undefined }}>{(v * 100).toFixed(0)}%</span>
-                          ),
-                      },
-                    ]}
-                  />
-                ) : null}
-                {detail.data.analysis.highlights?.length ? (
-                  <Table
-                    size="small"
-                    pagination={false}
-                    rowKey={(r) => `${r.round_no}-${r.start_tick}`}
-                    dataSource={detail.data.analysis.highlights}
-                    columns={[
-                      { title: "回合", dataIndex: "round_no", width: 60 },
-                      {
-                        title: "时刻", dataIndex: "label", width: 80,
-                        render: (v: string | null, r) => (
-                          <span>{v ?? `${r.kills}杀`}{r.clutch ? " 🔥残局" : ""}</span>
-                        ),
-                      },
-                      { title: "击杀", dataIndex: "kills", width: 60 },
-                      { title: "爆头", dataIndex: "headshots", width: 60 },
-                      { title: "评分", dataIndex: "score", width: 60 },
-                      {
-                        title: "回合结果", dataIndex: "round_won", width: 90,
-                        render: (v: boolean | null) => (v == null ? "—" : v ? "胜" : "负"),
-                      },
-                    ]}
-                  />
-                ) : null}
-                <Button size="small" loading={loadV1.isPending} onClick={() => loadV1.mutate()}>
-                  载入全场详细数据（10 人）
-                </Button>
-                {v1Data ? (
-                  <Table
-                    rowKey={(r: Record<string, unknown>) => String(r["playerId"])}
-                    size="small"
-                    pagination={false}
-                    dataSource={(v1Data["players"] as Record<string, unknown>[]) ?? []}
-                    rowClassName={(r: Record<string, unknown>) =>
-                      String(r["playerId"]) === String(detail.data.match.player_id ?? "") ? "my-row" : ""
-                    }
-                    columns={[
-                      { title: "队伍", dataIndex: "team", width: 60 },
-                      { title: "昵称", dataIndex: "nickName", ellipsis: true },
-                      { title: "K/D", key: "kd", render: (_: unknown, r: Record<string, unknown>) => `${r["kill"]}/${r["death"]}` },
-                      { title: "助攻", dataIndex: "assist", width: 55 },
-                      { title: "KAST", dataIndex: "kast", width: 65 },
-                      { title: "ADR", dataIndex: "adpr", width: 60 },
-                      { title: "Rating", dataIndex: "rating", width: 65 },
-                      { title: "首杀/首死", key: "entry", render: (_: unknown, r: Record<string, unknown>) => `${r["entryKill"]}/${r["entryDeath"]}` },
-                      { title: "补枪", dataIndex: "tradeFragCount", width: 55 },
-                      { title: "道具", dataIndex: "throwsCnt", width: 55 },
-                      { title: "WE", dataIndex: "we", width: 50 },
-                    ]}
-                  />
-                ) : null}
-              </>
-            ) : (
-              <Alert type="info" message="该场尚未做 demo 分析：在对局列表点「分析demo」生成四维数据" />
-            )}
-          </Space>
-        ) : (
-          "加载中…"
-        )}
-      </Drawer>
->>>>>>> feature/insights-v1
+
     </Space>
   );
 }
