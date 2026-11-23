@@ -10,6 +10,7 @@ from app.services.demo_analysis import (
     analyze_duels_damage,
     analyze_economy,
     analyze_utility,
+    collect_utility_spots,
     distance_bucket,
     weapon_class,
 )
@@ -362,3 +363,41 @@ def test_analyze_duels_damage_empty():
     """Given 无伤害事件 When analyze_duels_damage Then 双指标 None（不臆造 0）。"""
     fs, mirror = analyze_duels_damage(_damages_frame([]), _kills_frame([]), 111)
     assert fs is None and mirror is None
+
+
+def _spots_frame(rows, cols):
+    data = {c: [] for c in cols}
+    for r in rows:
+        for c in cols:
+            data[c].append(r.get(c))
+    return pl.DataFrame(data)
+
+
+def test_collect_utility_spots_filters_by_side():
+    """
+    Given user(ct) 2 烟 1 火 + 对方 1 烟，blinds 含 user 闪敌/被闪各 1
+    When  collect_utility_spots
+    Then  仅保留 user 侧烟/火（kind 正确、坐标透传），blinds 输出被闪者位置（我闪的+我被闪的）
+    """
+    sid = 111
+    demo = SimpleNamespace(
+        smokes=_spots_frame([
+            {"start_tick": 100, "end_tick": 1800, "thrower_steamid": sid, "thrower_side": "ct", "x": 100.0, "y": 200.0, "z": 0},
+            {"start_tick": 200, "end_tick": 1900, "thrower_steamid": 999, "thrower_side": "t", "x": 0.0, "y": 0.0, "z": 0},
+            {"start_tick": 300, "end_tick": 2000, "thrower_steamid": 555, "thrower_side": "ct", "x": 300.0, "y": 400.0, "z": 0},
+        ], ["start_tick", "end_tick", "thrower_steamid", "thrower_side", "x", "y", "z"]),
+        fires=_spots_frame([
+            {"start_tick": 400, "end_tick": 700, "thrower_steamid": sid, "thrower_side": "ct", "type": "molotov", "x": 500.0, "y": 600.0, "z": 0},
+        ], ["start_tick", "end_tick", "thrower_steamid", "thrower_side", "type", "x", "y", "z"]),
+        blinds=_spots_frame([
+            {"attacker_steamid": sid, "victim_steamid": 222, "attacker_side": "ct", "victim_side": "t", "duration": 2.0, "victim_x": 700.0, "victim_y": 800.0},
+            {"attacker_steamid": 222, "victim_steamid": sid, "attacker_side": "t", "victim_side": "ct", "duration": 1.0, "victim_x": 900.0, "victim_y": 1000.0},
+        ], ["attacker_steamid", "victim_steamid", "attacker_side", "victim_side", "duration", "victim_x", "victim_y"]),
+    )
+    spots = collect_utility_spots(demo, sid, "ct")
+    smokes = [s for s in spots if s.kind == "smoke"]
+    fires = [s for s in spots if s.kind == "fire"]
+    blinds = [s for s in spots if s.kind == "blind"]
+    assert len(smokes) == 2 and {s.x for s in smokes} == {100.0, 300.0}
+    assert len(fires) == 1 and fires[0].x == 500.0
+    assert len(blinds) == 2 and {b.y for b in blinds} == {800.0, 1000.0}
