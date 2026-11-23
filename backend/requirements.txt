@@ -67,3 +67,8 @@ websockets==17.4
 win32_setctime==1.2.1
 yarl==1.25.1
 python-multipart==0.0.20
+# AI 教练图片对话 OCR（2026-11-23）：RapidOCR 间接看图（DeepSeek 无 vision）
+rapidocr-onnxruntime==1.4.4
+onnxruntime==1.32.0
+pyclipper==1.4.0
+shapely==2.2.0
