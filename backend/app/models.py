@@ -190,4 +190,14 @@ class ChatMessage(SQLModel, table=True):
     session_id: int = Field(index=True, foreign_key="chatsession.id")
     role: str
     content: str
+    image_ids: str | None = Field(default=None, index=True)  # JSON 数组字符串，如 "[1,2]"
+    created_at: datetime = Field(default_factory=utcnow, sa_type=NAIVE_DT)
+
+
+class ChatImage(SQLModel, table=True):
+    """AI 教练对话图片（OCR 间接路线：落盘 + 识别文本，供上下文注入与前端展示）。"""
+    id: int | None = Field(default=None, primary_key=True)
+    session_id: int | None = Field(default=None, index=True)  # 上传时可未绑定，发消息时绑定
+    filename: str  # data/uploads/chat/{id}/{filename}
+    ocr_text: str = ""  # RapidOCR 识别文本（AI 以文字间接看图）
     created_at: datetime = Field(default_factory=utcnow, sa_type=NAIVE_DT)

@@ -39,6 +39,8 @@ _MIGRATIONS = [
     # 学道具 v2（2026-11-23 grill-me 八问共识）：分区列 + 收藏列（幂等：try/except 已存在则跳过）
     "ALTER TABLE grenadecard ADD COLUMN zone VARCHAR",
     "ALTER TABLE grenadecard ADD COLUMN favorited BOOLEAN DEFAULT 0",
+    # AI 教练图片对话（2026-11-23 OCR 间接路线）：消息带图 id 列
+    "ALTER TABLE chatmessage ADD COLUMN image_ids VARCHAR",
 ]
 
 

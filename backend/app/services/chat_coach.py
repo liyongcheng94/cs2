@@ -9,11 +9,33 @@ from ..models import ChatMessage, ChatSession, PlayerProfile, Report
 from .ai_client import AiError, build_ai_client, load_prompt
 
 
-async def chat_stream(user_content: str, session_id: int | None = None, session_factory_fn=None):
-    """流式对话：返回 SSE 生成器（delta/done 事件）；结束时持久化 assistant 消息。"""
+async def chat_stream(user_content: str, session_id: int | None = None, session_factory_fn=None, image_ids: list[int] | None = None):
+    """流式对话：返回 SSE 生成器（delta/done 事件）；结束时持久化 assistant 消息。图片 OCR 同 chat()。"""
     import json as _json
 
     sf = session_factory_fn or session_factory
+    ocr_block = ""
+    if image_ids:
+        from ..models import ChatImage
+        from .ocr import ocr_image
+        from ..config import get_data_dir
+
+        texts = []
+        with sf() as session:
+            for img_id in image_ids:
+                img = session.get(ChatImage, img_id)
+                if img is None:
+                    continue
+                path = get_data_dir() / "uploads" / "chat" / str(img.id) / img.filename
+                text = ocr_image(path) if path.exists() else ""
+                img.ocr_text = text
+                img.session_id = session_id if session_id else None
+                session.add(img)
+                if text:
+                    texts.append(f"[图片{img_id}内容]\n{text}")
+        if texts:
+            ocr_block = "\n".join(texts) + "\n\n"
+
     with sf() as session:
         if session_id is None:
             cs = ChatSession(title=user_content[:20] or "新对话")
@@ -26,7 +48,14 @@ async def chat_stream(user_content: str, session_id: int | None = None, session_
             if cs is not None and cs.title == "新对话":
                 cs.title = user_content[:20] or "新对话"
                 session.add(cs)
-        session.add(ChatMessage(session_id=session_id, role="user", content=user_content))
+        session.add(
+            ChatMessage(
+                session_id=session_id,
+                role="user",
+                content=user_content,
+                image_ids=_json.dumps(image_ids) if image_ids else None,
+            )
+        )
         session.commit()
 
     instruction = _build_instruction()
@@ -35,13 +64,14 @@ async def chat_stream(user_content: str, session_id: int | None = None, session_
             select(ChatMessage).where(ChatMessage.session_id == session_id).order_by(ChatMessage.id)
         ).all()
     history_text = "\n".join(f"[{m.role}] {m.content}" for m in history)
+    user_payload = f"{ocr_block}[user] {user_content}" if ocr_block else history_text
     with sf() as session:
         ai = build_ai_client(session)
 
     async def gen():
         full: list[str] = []
         try:
-            async for delta in ai.chat_stream(instruction, history_text):
+            async for delta in ai.chat_stream(instruction, user_payload):
                 full.append(delta)
                 yield f"data: {_json.dumps({'delta': delta}, ensure_ascii=False)}\n\n"
             reply = "".join(full)
@@ -84,9 +114,40 @@ def _build_instruction() -> str:
     return "\n\n".join(parts)
 
 
-async def chat(user_content: str, session_id: int | None = None, session_factory_fn=None) -> dict:
-    """一轮对话：存 user 消息 → 带历史调 AI → 存 assistant 回复。AI 失败仅存 user 并报错。"""
+async def chat(
+    user_content: str,
+    session_id: int | None = None,
+    session_factory_fn=None,
+    image_ids: list[int] | None = None,
+) -> dict:
+    """一轮对话：存 user 消息 → 带历史调 AI → 存 assistant 回复。AI 失败仅存 user 并报错。
+
+    image_ids 非空时：绑定图片到消息 + OCR 文本以「[图片N内容]」注入本轮上下文
+    （DeepSeek 无 vision，2026-11-23 用户选型 OCR 间接路线）。
+    """
     sf = session_factory_fn or session_factory
+    ocr_block = ""
+    if image_ids:
+        from ..models import ChatImage
+        from .ocr import ocr_image
+        from ..config import get_data_dir
+
+        texts = []
+        with sf() as session:
+            for img_id in image_ids:
+                img = session.get(ChatImage, img_id)
+                if img is None:
+                    continue
+                img.session_id = session_id if session_id else None
+                path = get_data_dir() / "uploads" / "chat" / str(img.id) / img.filename
+                text = ocr_image(path) if path.exists() else ""
+                img.ocr_text = text
+                session.add(img)
+                if text:
+                    texts.append(f"[图片{img_id}内容]\n{text}")
+        if texts:
+            ocr_block = "\n".join(texts) + "\n\n"
+
     with sf() as session:
         if session_id is None:
             cs = ChatSession(title=user_content[:20] or "新对话")
@@ -99,7 +160,16 @@ async def chat(user_content: str, session_id: int | None = None, session_factory
             if cs is not None and cs.title == "新对话":
                 cs.title = user_content[:20] or "新对话"  # 首句自动作标题
                 session.add(cs)
-        session.add(ChatMessage(session_id=session_id, role="user", content=user_content))
+        import json as _json
+
+        session.add(
+            ChatMessage(
+                session_id=session_id,
+                role="user",
+                content=user_content,
+                image_ids=_json.dumps(image_ids) if image_ids else None,
+            )
+        )
         session.commit()
 
     instruction = _build_instruction()
@@ -108,10 +178,11 @@ async def chat(user_content: str, session_id: int | None = None, session_factory
             select(ChatMessage).where(ChatMessage.session_id == session_id).order_by(ChatMessage.id)
         ).all()
     history_text = "\n".join(f"[{m.role}] {m.content}" for m in history)
+    user_payload = f"{ocr_block}[user] {user_content}" if ocr_block else history_text
     try:
         with sf() as session:
             ai = build_ai_client(session)
-        reply = await ai.chat(instruction, history_text)
+        reply = await ai.chat(instruction, user_payload)
     except AiError as exc:
         logger.warning(f"[AI教练] 会话 {session_id} 调用失败：{exc}")
         return {"session_id": session_id, "reply": None, "error": str(exc)}
@@ -128,11 +199,14 @@ def list_sessions(session: Session) -> list[dict]:
 
 
 def list_messages(session: Session, session_id: int) -> list[dict]:
+    import json as _json
+
     rows = session.exec(
         select(ChatMessage).where(ChatMessage.session_id == session_id).order_by(ChatMessage.id)
     ).all()
     return [
         {"id": r.id, "role": r.role, "content": r.content,
+         "image_ids": _json.loads(r.image_ids) if r.image_ids else [],
          "created_at": r.created_at.isoformat() if r.created_at else None}
         for r in rows
     ]
