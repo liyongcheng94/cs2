@@ -419,10 +419,10 @@ def compute_server_ratings(players_v1: list[dict], utility_players: list[Utility
     players_out: dict[str, dict[str, float]] = {}
     averages: dict[str, float] = {}
     for dim, vals in raw.items():
-        nums = [v for v in vals.values()]
-        averages[zh[dim]] = round(sum(nums) / len(nums) / (max(nums) - min(nums) + 1e-9) * 100, 1) if nums else 50.0
-        for pid in vals:
-            players_out.setdefault(pid, {})[zh[dim]] = _norm(vals, pid) or 50.0
+        normed = {pid: _norm(vals, pid) for pid in vals}
+        players_out.update({pid: {**players_out.get(pid, {}), zh[dim]: v} for pid, v in normed.items()})
+        good = [v for v in normed.values() if v is not None]
+        averages[zh[dim]] = round(sum(good) / len(good), 1) if good else 50.0
     return ServerRatings(players=players_out, averages=averages)
 
 
