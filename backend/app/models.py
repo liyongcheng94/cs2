@@ -148,6 +148,15 @@ class GrenadeCard(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow, sa_type=NAIVE_DT)
 
 
+class GrenadeCardImage(SQLModel, table=True):
+    """道具卡贴图（用户手传，grill-me v2 决策 1a：文件落 data/uploads/{card_id}/）。"""
+
+    id: int | None = Field(default=None, primary_key=True)
+    card_id: int = Field(index=True, foreign_key="grenadecard.id")
+    filename: str = ""  # 服务端 uuid 命名
+    created_at: datetime = Field(default_factory=utcnow, sa_type=NAIVE_DT)
+
+
 class Clip(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     moment_id: str = Field(unique=True, index=True)
