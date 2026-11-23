@@ -84,6 +84,46 @@ def get_upload(image_id: int, filename: str) -> FileResponse:
     return FileResponse(target, media_type=mime)
 
 
+class BindImageItem(BaseModel):
+    image_id: int
+    message_index: int  # 会话内消息顺序（0-based）
+
+
+class BindImagesBody(BaseModel):
+    session_id: int
+    bindings: list[BindImageItem]
+
+
+@router.post("/import/bind-images")
+async def import_bind_images(body: BindImagesBody, session: SessionDep) -> dict:
+    """导入后补绑图片：把已上传（/chat/images）的图片绑定到会话内第 N 条消息。幂等（重复绑覆盖同值）。"""
+    from ..models import ChatImage, ChatMessage
+
+    bound = 0
+    for b in body.bindings:
+        msgs = session.exec(
+            select(ChatMessage)
+            .where(ChatMessage.session_id == body.session_id)
+            .order_by(ChatMessage.id)
+        ).all()
+        if b.message_index < 0 or b.message_index >= len(msgs):
+            raise HTTPException(status_code=400, detail=f"message_index {b.message_index} 越界（共 {len(msgs)} 条）")
+        img = session.get(ChatImage, b.image_id)
+        if img is None:
+            raise HTTPException(status_code=404, detail=f"image {b.image_id} 不存在")
+        msg = msgs[b.message_index]
+        ids = json.loads(msg.image_ids) if msg.image_ids else []
+        if b.image_id not in ids:
+            ids.append(b.image_id)
+        msg.image_ids = json.dumps(ids)
+        img.session_id = body.session_id
+        session.add(msg)
+        session.add(img)
+        bound += 1
+    session.commit()
+    return {"bound": bound}
+
+
 class ImportMessage(BaseModel):
     role: str
     content: str
