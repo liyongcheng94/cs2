@@ -13,7 +13,15 @@ from ..config import get_data_dir
 from ..database import SessionDep
 from ..models import ChatSession
 from sqlmodel import select
-from ..services.chat_coach import chat, chat_stream, delete_session, list_messages, list_sessions
+from ..services.chat_coach import (
+    card_to_task,
+    chat,
+    chat_stream,
+    delete_session,
+    list_messages,
+    list_sessions,
+    list_training_cards,
+)
 from ..services.ocr import ocr_image
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -229,6 +237,18 @@ def get_messages(session_id: int, session: SessionDep) -> list[dict]:
 def remove_session(session_id: int, session: SessionDep) -> dict:
     delete_session(session, session_id)
     return {"deleted": True}
+
+
+@router.get("/training-cards")
+def get_training_cards(session: SessionDep) -> list[dict]:
+    """训练处方卡列表（教练回复解析产物；task_id 非空 = 已入任务中心）。"""
+    return list_training_cards(session)
+
+
+@router.post("/training-cards/{card_id}/to-task")
+def send_card_to_task(card_id: int, session: SessionDep) -> dict:
+    """处方卡一键入任务中心（409 = 已入过，防重复打卡）。"""
+    return card_to_task(session, card_id)
 
 
 @router.post("")

@@ -202,3 +202,16 @@ class ChatImage(SQLModel, table=True):
     filename: str  # data/uploads/chat/{id}/{filename}
     ocr_text: str = ""  # RapidOCR 识别文本（AI 以文字间接看图）
     created_at: datetime = Field(default_factory=utcnow, sa_type=NAIVE_DT)
+
+
+class TrainingCard(SQLModel, table=True):
+    """训练处方卡（教练回复的 ```training 块解析产物）：一键入任务中心打卡。"""
+    id: int | None = Field(default=None, primary_key=True)
+    session_id: int = Field(index=True, foreign_key="chatsession.id")
+    title: str
+    detail: str = ""
+    duration_min: int | None = None  # 建议时长（分钟）
+    check: str = ""  # 验收标准（如「爆头击杀 200」）
+    content_hash: str = Field(unique=True, index=True)  # title+detail+check 去重键
+    task_id: int | None = Field(default=None, index=True)  # 入任务中心后的 Task.id
+    created_at: datetime = Field(default_factory=utcnow, sa_type=NAIVE_DT)

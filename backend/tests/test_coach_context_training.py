@@ -134,7 +134,7 @@ class TestTrainingCards:
         resp = client.post("/api/chat", json={"session_id": sid, "content": "这周练什么"})
         assert resp.status_code == 200
 
-        cards = client.get("/chat/training-cards").json()
+        cards = client.get("/api/chat/training-cards").json()
         assert len(cards) == 1
         c = cards[0]
         assert c["title"] == "Aim Botz 爆头流"
@@ -148,7 +148,7 @@ class TestTrainingCards:
         stub_ai_bridge["reply"]["reply"] = "今天状态不错，保持。"
         sid = _seed_session(client)
         client.post("/api/chat", json={"session_id": sid, "content": "今天感觉如何"})
-        assert client.get("/chat/training-cards").json() == []
+        assert client.get("/api/chat/training-cards").json() == []
 
     def test_duplicate_plan_idempotent(self, client, stub_ai_bridge):
         """B3：同一处方重复出现（重发/多轮）→ 幂等不重复建卡。"""
@@ -157,7 +157,7 @@ class TestTrainingCards:
         client.post("/api/chat", json={"session_id": sid, "content": "这周练什么"})
         sid2 = _seed_session(client)
         client.post("/api/chat", json={"session_id": sid2, "content": "再给一遍计划"})
-        cards = client.get("/chat/training-cards").json()
+        cards = client.get("/api/chat/training-cards").json()
         assert len(cards) == 1  # content_hash 去重
 
     def test_malformed_plan_block_ignored(self, client, stub_ai_bridge):
@@ -166,28 +166,28 @@ class TestTrainingCards:
         sid = _seed_session(client)
         resp = client.post("/api/chat", json={"session_id": sid, "content": "练什么"})
         assert resp.status_code == 200
-        assert client.get("/chat/training-cards").json() == []
+        assert client.get("/api/chat/training-cards").json() == []
 
     def test_card_to_task(self, client, stub_ai_bridge):
         """B5：处方卡 → 一键入任务中心（type=training_practice）。"""
         stub_ai_bridge["reply"]["reply"] = REPLY_WITH_PLAN
         sid = _seed_session(client)
         client.post("/api/chat", json={"session_id": sid, "content": "这周练什么"})
-        card = client.get("/chat/training-cards").json()[0]
+        card = client.get("/api/chat/training-cards").json()[0]
 
-        resp = client.post(f"/chat/training-cards/{card['id']}/to-task")
+        resp = client.post(f"/api/chat/training-cards/{card['id']}/to-task")
         assert resp.status_code == 200
         task_id = resp.json()["task_id"]
 
         # 任务中心可见 + 直接 run 即 success（训练打卡不需要外部 handler）
-        task = client.get(f"/tasks/{task_id}").json()
+        task = client.get(f"/api/tasks/{task_id}").json()
         assert task["type"] == "training_practice"
         assert task["payload"]["title"] == "Aim Botz 爆头流"
-        run = client.post(f"/tasks/{task_id}/run")
+        run = client.post(f"/api/tasks/{task_id}/run")
         assert run.json()["status"] == "success"
 
         # 卡片状态联动：task_id 回填
-        cards = client.get("/chat/training-cards").json()
+        cards = client.get("/api/chat/training-cards").json()
         assert cards[0]["task_id"] == task_id
 
     def test_to_task_twice_rejected(self, client, stub_ai_bridge):
@@ -195,16 +195,16 @@ class TestTrainingCards:
         stub_ai_bridge["reply"]["reply"] = REPLY_WITH_PLAN
         sid = _seed_session(client)
         client.post("/api/chat", json={"session_id": sid, "content": "练什么"})
-        card = client.get("/chat/training-cards").json()[0]
-        client.post(f"/chat/training-cards/{card['id']}/to-task")
-        resp = client.post(f"/chat/training-cards/{card['id']}/to-task")
+        card = client.get("/api/chat/training-cards").json()[0]
+        client.post(f"/api/chat/training-cards/{card['id']}/to-task")
+        resp = client.post(f"/api/chat/training-cards/{card['id']}/to-task")
         assert resp.status_code == 409
 
     def test_stream_also_creates_cards(self, client, stub_ai_bridge):
         """B7：流式对话同样解析处方（主路径是 SSE）。"""
         stub_ai_bridge["reply"]["reply"] = REPLY_WITH_PLAN
         sid = _seed_session(client)
-        with client.stream("POST", "/chat/stream", json={"session_id": sid, "content": "练什么"}) as r:
+        with client.stream("POST", "/api/chat/stream", json={"session_id": sid, "content": "练什么"}) as r:
             for _ in r.iter_text():
                 pass
-        assert len(client.get("/chat/training-cards").json()) == 1
+        assert len(client.get("/api/chat/training-cards").json()) == 1

@@ -1,18 +1,23 @@
-"""AI 教练对话：多轮会话持久化 + 上下文注入（玩家画像 + 最近复盘）+ MindVault AI 桥。"""
+"""AI 教练对话：多轮会话持久化 + 上下文注入（画像/赛季数据/道具卡）+ 训练处方闭环 + MindVault AI 桥。"""
 from __future__ import annotations
+
+import hashlib
+import json as _json
+import re
 
 from loguru import logger
 from sqlmodel import Session, select
 
 from ..database import session_factory
-from ..models import ChatMessage, ChatSession, PlayerProfile, Report
+from ..models import ChatMessage, ChatSession, PlayerProfile, Report, TrainingCard
 from .ai_client import AiError, build_ai_client, load_prompt
+
+# ```training {json} 处方块（容 ```json training / ```training 变体）
+_TRAINING_RE = re.compile(r"```(?:json\s+)?training\s*(\{.*?\})\s*```", re.S)
 
 
 async def chat_stream(user_content: str, session_id: int | None = None, session_factory_fn=None, image_ids: list[int] | None = None):
     """流式对话：返回 SSE 生成器（delta/done 事件）；结束时持久化 assistant 消息。图片 OCR 同 chat()。"""
-    import json as _json
-
     sf = session_factory_fn or session_factory
     ocr_block = ""
     if image_ids:
@@ -78,6 +83,7 @@ async def chat_stream(user_content: str, session_id: int | None = None, session_
             with sf() as session:
                 session.add(ChatMessage(session_id=session_id, role="assistant", content=reply))
                 session.commit()
+            _extract_training_cards(reply, session_id, sf)
             yield f"data: {_json.dumps({'done': True, 'session_id': session_id}, ensure_ascii=False)}\n\n"
         except AiError as exc:
             logger.warning(f"[AI教练] 会话 {session_id} 流式调用失败：{exc}")
@@ -197,8 +203,6 @@ async def chat(
             if cs is not None and cs.title == "新对话":
                 cs.title = user_content[:20] or "新对话"  # 首句自动作标题
                 session.add(cs)
-        import json as _json
-
         session.add(
             ChatMessage(
                 session_id=session_id,
@@ -227,7 +231,85 @@ async def chat(
     with sf() as session:
         session.add(ChatMessage(session_id=session_id, role="assistant", content=reply))
         session.commit()
-    return {"session_id": session_id, "reply": reply, "error": None}
+    created = _extract_training_cards(reply, session_id, sf)
+    return {"session_id": session_id, "reply": reply, "error": None, "training_cards": created}
+
+
+def _extract_training_cards(reply: str, session_id: int, sf) -> list[int]:
+    """教练回复中的 ```training 块 → TrainingCard 行（content_hash 幂等；JSON 非法整块忽略）。"""
+    created: list[int] = []
+    for m in _TRAINING_RE.finditer(reply):
+        try:
+            data = _json.loads(m.group(1))
+            items = data.get("items") if isinstance(data, dict) else data
+            if not isinstance(items, list):
+                continue
+        except (ValueError, TypeError):
+            continue
+        for item in items:
+            if not isinstance(item, dict) or not str(item.get("title", "")).strip():
+                continue
+            title = str(item["title"]).strip()
+            detail = str(item.get("detail") or "").strip()
+            check = str(item.get("check") or "").strip()
+            h = hashlib.sha256(f"{title}|{detail}|{check}".encode()).hexdigest()
+            with sf() as session:
+                if session.exec(select(TrainingCard).where(TrainingCard.content_hash == h)).first():
+                    continue  # 幂等：同处方不重复建卡
+                row = TrainingCard(
+                    session_id=session_id,
+                    title=title,
+                    detail=detail,
+                    duration_min=int(item["duration_min"]) if item.get("duration_min") else None,
+                    check=check,
+                    content_hash=h,
+                )
+                session.add(row)
+                session.commit()
+                session.refresh(row)
+                created.append(row.id)
+                logger.info(f"[教练处方] 卡 {row.id}: {title}")
+    return created
+
+
+def list_training_cards(session: Session) -> list[dict]:
+    rows = session.exec(select(TrainingCard).order_by(TrainingCard.created_at.desc())).all()
+    return [
+        {
+            "id": r.id,
+            "session_id": r.session_id,
+            "title": r.title,
+            "detail": r.detail,
+            "duration_min": r.duration_min,
+            "check": r.check,
+            "task_id": r.task_id,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in rows
+    ]
+
+
+def card_to_task(session: Session, card_id: int) -> dict:
+    """处方卡一键入任务中心：type=training_practice（run 即 success，打卡语义）。"""
+    from fastapi import HTTPException
+
+    from . import task_manager
+
+    card = session.get(TrainingCard, card_id)
+    if card is None:
+        raise HTTPException(status_code=404, detail="处方卡不存在")
+    if card.task_id is not None:
+        raise HTTPException(status_code=409, detail="该处方卡已入任务中心")
+    task = task_manager.create_task(
+        session,
+        "training_practice",
+        {"title": card.title, "detail": card.detail, "duration_min": card.duration_min,
+         "check": card.check, "card_id": card.id},
+    )
+    card.task_id = task.id
+    session.add(card)
+    session.commit()
+    return {"task_id": task.id}
 
 
 def list_sessions(session: Session) -> list[dict]:
