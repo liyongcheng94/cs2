@@ -43,6 +43,9 @@ _MIGRATIONS = [
     "ALTER TABLE chatmessage ADD COLUMN image_ids VARCHAR",
     # DeepSeek 分享对话导入幂等键
     "ALTER TABLE chatsession ADD COLUMN import_key VARCHAR",
+    # 学道具 v3（2026-11-23 时效健康度）：卡健康列 + 视频发布时间列
+    "ALTER TABLE grenadecard ADD COLUMN health VARCHAR DEFAULT 'alive'",
+    "ALTER TABLE grenadecard ADD COLUMN video_pubdate INTEGER",
 ]
 
 

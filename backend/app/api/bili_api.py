@@ -11,7 +11,8 @@ from sqlmodel import select
 
 from ..config import get_data_dir
 from ..database import SessionDep
-from ..models import BiliVideo, GrenadeCard, GrenadeCardImage, VideoSummary
+from ..models import BiliVideo, GrenadeCard, GrenadeCardImage, GrenadeCardSignal, VideoSummary
+from ..services.bili_health import aggregate_health, health_summary
 
 router = APIRouter(prefix="/bili", tags=["bili"])
 
@@ -61,8 +62,16 @@ def list_grenades(session: SessionDep, map_name: str = "", grenade_type: str = "
             "content_md": r.content_md,
             "zone": r.zone,
             "favorited": bool(r.favorited),
+            "health": r.health or "alive",
         })
     return out
+
+
+@router.get("/grenades/health-summary")
+def grenades_health_summary(session: SessionDep) -> dict:
+    """道具库健康度总览（v3 S3）：{alive, aging, stale} 计数。"""
+    cards = session.exec(select(GrenadeCard)).all()
+    return health_summary(cards)
 
 
 @router.patch("/grenades/{card_id}/favorite")
@@ -75,6 +84,40 @@ def patch_favorite(card_id: int, body: dict, session: SessionDep) -> dict:
     session.add(card)
     session.commit()
     return {"id": card.id, "favorited": card.favorited}
+
+
+@router.post("/grenades/{card_id}/stale-report")
+def stale_report(card_id: int, body: dict, session: SessionDep) -> dict:
+    """用户上报卡过期（v3 S2：用户是时效最强信号源）→ health 直接 stale + 信号入库（幂等）。"""
+    card = session.get(GrenadeCard, card_id)
+    if card is None:
+        raise HTTPException(status_code=404, detail="道具卡不存在")
+    note = (body.get("note") or "用户上报过期").strip()[:200]
+    exists = session.exec(
+        select(GrenadeCardSignal).where(
+            GrenadeCardSignal.card_id == card_id,
+            GrenadeCardSignal.source == "report",
+            GrenadeCardSignal.text == note,
+        )
+    ).first()
+    if not exists:
+        session.add(GrenadeCardSignal(card_id=card_id, source="report", text=note))
+    card.health = "stale"
+    session.add(card)
+    session.commit()
+    return {"id": card.id, "health": card.health}
+
+
+@router.post("/grenades/{card_id}/refresh-health")
+def refresh_health(card_id: int, session: SessionDep) -> dict:
+    """三信号聚合刷新健康度（v3 S3：report > comment > patch）。"""
+    card = session.get(GrenadeCard, card_id)
+    if card is None:
+        raise HTTPException(status_code=404, detail="道具卡不存在")
+    health = aggregate_health(session, card)
+    session.add(card)
+    session.commit()
+    return {"id": card.id, "health": health}
 
 
 # ---- 道具卡贴图（grill-me v2 决策 1a-1c：用户手传多图，存 data/uploads/{card_id}/） ----

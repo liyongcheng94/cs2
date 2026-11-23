@@ -145,6 +145,8 @@ class GrenadeCard(SQLModel, table=True):
     mv_uuid: str | None = None
     zone: str | None = Field(default=None, index=True)  # A区/B区/中路/出生点（AI 输出，前端正则兜底）
     favorited: bool = Field(default=False)  # 用户收藏（★），列表收藏置顶
+    health: str = Field(default="alive")  # v3 时效健康度：alive/aging/stale（Slice3 聚合产出）
+    video_pubdate: int | None = None  # 视频发布时间（unix 秒，补丁对照用；学习时顺路写入）
     created_at: datetime = Field(default_factory=utcnow, sa_type=NAIVE_DT)
 
 
