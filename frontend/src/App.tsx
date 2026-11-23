@@ -6,7 +6,6 @@ import {
   Card,
   Col,
   Descriptions,
-  Drawer,
   Form,
   Input,
   Layout,
@@ -21,11 +20,10 @@ import {
   Typography,
 } from "antd";
 import { apiGet, apiPost, apiPut } from "./api/client";
-import { DeathScatter } from "./components/DeathScatter";
-import { DuelHeatmap } from "./components/DuelHeatmap";
 import { CoachChat } from "./components/CoachChat";
 import { SeasonTrends } from "./components/SeasonTrends";
 import { WanmeiLogin } from "./components/WanmeiLogin";
+import { MatchDetailModal } from "./components/MatchDetailModal";
 import type { MatchDetail, MatchSummary, MockFlowResult, Profile, TaskItem } from "./types";
 
 const { Header, Content } = Layout;
@@ -166,11 +164,6 @@ function MatchesPage() {
     queryFn: () => apiGet<MatchDetail>(`/matches/${detailId}`),
     enabled: detailId !== null,
   });
-  const [v1Data, setV1Data] = useState<Record<string, unknown> | null>(null);
-  const loadV1 = useMutation({
-    mutationFn: () => apiGet<Record<string, unknown>>(`/matches/${detailId}/detail-v1`),
-    onSuccess: (d) => setV1Data(d),
-  });
 
   const columns = [
     { title: "地图", dataIndex: "map_name", key: "map_name" },
@@ -183,7 +176,7 @@ function MatchesPage() {
       title: "胜负",
       key: "result",
       render: (_: unknown, r: MatchSummary & { draw?: boolean }) =>
-        r.draw ? <Tag color="orange">平</Tag> : r.win ? <Tag color="green">胜</Tag> : <Tag color="red">负</Tag>,
+        r.draw ? <Tag color="orange">平</Tag> : r.win ? <Tag color="green">胜</Tag> : <Tag color="red">败</Tag>,
     },
     { title: "模式", dataIndex: "mode", key: "mode" },
     {
@@ -231,72 +224,7 @@ function MatchesPage() {
         columns={columns}
         pagination={{ pageSize: 15 }}
       />
-      <Drawer
-        title="对局详情"
-        width={640}
-        open={detailId !== null}
-        onClose={() => setDetailId(null)}
-      >
-        {detail.data ? (
-          <Space direction="vertical" style={{ width: "100%" }}>
-            {detail.data.report ? (
-              <Alert
-                type={detail.data.report.pushed ? "success" : "warning"}
-                message={`复盘：${detail.data.report.title}`}
-                description={detail.data.report.pushed ? "已推送 MindVault" : "未推送"}
-              />
-            ) : null}
-            {detail.data.analysis ? (
-              <>
-                <DuelHeatmap analysis={detail.data.analysis} />
-                <DeathScatter analysis={detail.data.analysis} mapEn={detail.data.match.map_en} />
-                <Row gutter={16}>
-                  {detail.data.analysis.deaths?.disadvantaged_rate != null ? (
-                    <Col span={8}><Statistic title="劣势枪位死亡率" value={(detail.data.analysis.deaths.disadvantaged_rate * 100).toFixed(0) + "%"} /></Col>
-                  ) : null}
-                  {detail.data.analysis.utility?.blind_median_s != null ? (
-                    <Col span={8}><Statistic title="致盲时长中位数" value={detail.data.analysis.utility.blind_median_s + "s"} /></Col>
-                  ) : null}
-                  {detail.data.analysis.economy?.first_kill_conversion != null ? (
-                    <Col span={8}><Statistic title="首杀转化率" value={(detail.data.analysis.economy.first_kill_conversion * 100).toFixed(0) + "%"} /></Col>
-                  ) : null}
-                </Row>
-                <Button size="small" loading={loadV1.isPending} onClick={() => loadV1.mutate()}>
-                  载入全场详细数据（10 人）
-                </Button>
-                {v1Data ? (
-                  <Table
-                    rowKey={(r: Record<string, unknown>) => String(r["playerId"])}
-                    size="small"
-                    pagination={false}
-                    dataSource={(v1Data["players"] as Record<string, unknown>[]) ?? []}
-                    rowClassName={(r: Record<string, unknown>) =>
-                      String(r["playerId"]) === String(detail.data.match.player_id ?? "") ? "my-row" : ""
-                    }
-                    columns={[
-                      { title: "队伍", dataIndex: "team", width: 60 },
-                      { title: "昵称", dataIndex: "nickName", ellipsis: true },
-                      { title: "K/D", key: "kd", render: (_: unknown, r: Record<string, unknown>) => `${r["kill"]}/${r["death"]}` },
-                      { title: "助攻", dataIndex: "assist", width: 55 },
-                      { title: "KAST", dataIndex: "kast", width: 65 },
-                      { title: "ADR", dataIndex: "adpr", width: 60 },
-                      { title: "Rating", dataIndex: "rating", width: 65 },
-                      { title: "首杀/首死", key: "entry", render: (_: unknown, r: Record<string, unknown>) => `${r["entryKill"]}/${r["entryDeath"]}` },
-                      { title: "补枪", dataIndex: "tradeFragCount", width: 55 },
-                      { title: "道具", dataIndex: "throwsCnt", width: 55 },
-                      { title: "WE", dataIndex: "we", width: 50 },
-                    ]}
-                  />
-                ) : null}
-              </>
-            ) : (
-              <Alert type="info" message="该场尚未做 demo 分析：在对局列表点「分析demo」生成四维数据" />
-            )}
-          </Space>
-        ) : (
-          "加载中…"
-        )}
-      </Drawer>
+      <MatchDetailModal open={detailId !== null} detail={detail.data ?? null} onClose={() => setDetailId(null)} />
     </Space>
   );
 }

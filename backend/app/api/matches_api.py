@@ -108,3 +108,15 @@ async def match_detail_v1(match_id: int, session: SessionDep) -> dict:
     session.add(match)
     session.commit()
     return data
+
+
+@router.get("/{match_id}/report-md")
+def match_report_md(match_id: int, session: SessionDep) -> dict:
+    """复盘 Markdown 内容（AI 复盘 Tab 数据源）。"""
+    match = session.get(Match, match_id)
+    if match is None:
+        raise HTTPException(status_code=404, detail="对局不存在")
+    report = session.exec(select(Report).where(Report.match_id == match.match_id)).first()
+    if report is None:
+        raise HTTPException(status_code=404, detail="尚未生成复盘")
+    return {"title": report.title, "content_md": report.content_md, "degraded": report.degraded, "pushed": report.pushed}

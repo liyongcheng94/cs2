@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 
+import re
 import time
 import tracemalloc
 
@@ -40,12 +41,16 @@ WEAPON_CLASSES = {
     "glock": "pistol", "usp_silencer": "pistol", "deagle": "pistol", "p250": "pistol",
     "tec9": "pistol", "fiveseven": "pistol", "cz75a": "pistol", "dual_berettas": "pistol",
     "mac10": "smg", "mp9": "smg", "mp7": "smg", "ump45": "smg", "p90": "smg", "bizon": "smg",
+    "nova": "shotgun", "xm1014": "shotgun", "mag7": "shotgun", "sawedoff": "shotgun",
 }
 AWP_LIKE = {"awp", "ssg08", "scar20"}
 
 
 def weapon_class(weapon: str | None) -> str:
-    return WEAPON_CLASSES.get((weapon or "").lower(), "other")
+    """武器归类；完美平台 demo 的饰品皮肤带 _txzNN 后缀（如 ak47_txz02），先剥离再匹配。"""
+    w = (weapon or "").lower()
+    w = re.sub(r"_txz\d+$", "", w)  # 完美皮肤后缀（实测 ak47_txz02/awp_txz02/nova_txz02…）
+    return WEAPON_CLASSES.get(w, "other")
 
 
 def distance_bucket(dist_m: float) -> str:

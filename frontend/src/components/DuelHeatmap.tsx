@@ -70,6 +70,7 @@ export function DuelHeatmap({ analysis }: { analysis: FourDimAnalysisShape | nul
         {
           type: "heatmap",
           data,
+          itemStyle: { borderColor: "#141414", borderWidth: 2 },
           label: {
             show: true,
             formatter: (p: { data: [number, number, number | null] }) =>

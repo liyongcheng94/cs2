@@ -40,6 +40,13 @@ def test_weapon_class_mapping():
     assert weapon_class("mac10") == "smg"
     assert weapon_class("knife_t") == "other"
     assert weapon_class(None) == "other"
+    # 完美平台皮肤后缀 _txzNN（实测 ak47_txz02 全进 other 的根因）
+    assert weapon_class("ak47_txz02") == "rifle"
+    assert weapon_class("awp_txz02") == "sniper"
+    assert weapon_class("usp_silencer_txz02") == "pistol"
+    assert weapon_class("mac10_txz02") == "smg"
+    assert weapon_class("nova_txz02") == "shotgun"
+    assert weapon_class("mag7") == "shotgun"
 
 
 def test_distance_bucket():
