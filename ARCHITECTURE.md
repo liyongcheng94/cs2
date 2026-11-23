@@ -37,7 +37,7 @@
 - 32 后端用例全绿（含 NEED_AUTH 熔断、幂等重同步）；前端 WanmeiLogin 对话框 + 对局页同步按钮，tsc PASS。
 - **闸门证据（2026-11-22）**：用户面板真实短信登录成功 → 首次同步 3 页 **60 场真实对局入库**，二次同步 inserted=0/updated=60（幂等不重复）；MOCK 假数据已清理；NEED_AUTH 熔断由单元测试覆盖（真实 token 反失效演练需再耗一次短信，未执行破坏性验证）。
 
-### [ ] 阶段 2：demo 解析 + AI 复盘（2.5 天，核心）
+### [x] 阶段 2：demo 解析 + AI 复盘（2.5 天，核心）——2026-11-23 勾选修正：spike 已落 docs/spike-demo-parsers.md（awpy 3.3.0 选型，2.4s/18MB vs demoparser2 5.0s/50MB），四维/复盘/推送链路已全通（此前文档勾选滞后于实际）
 - spike：demoparser2 vs awpy 双基准（API 体验 + 30min demo 耗时/峰值内存）；按需提取（对枪 player_death、道具 grenade_throw+player_blind、劣势枪位死亡前 1s 坐标+Yaw/Pitch）；仍慢按回合分块。结论落 docs/。
 - CPU 任务隔离：`asyncio.to_thread()` + Semaphore(1) 串行防 OOM。
 - `services/demo_dl.py`：签名 URL 下载；失败 5s 重试 1 次 → pending_demo 下轮凌晨批量；解析产出 JSON 后立即删 raw demo。
@@ -70,6 +70,40 @@
 - ✅ 对话流式：DeepSeek stream:true → SSE `/api/chat/stream`（delta/done 事件）→ 前端逐字渲染；mindvault 桥自动回退单段；实测逐字推送且内容基于画像口径
 - ✅ 周报 AI 周评：聚合数据 → AI 段落（失败跳过不降级）
 - ⏸ 时刻端点抓包：需用户抓包配合，挂起
+
+## 三期：洞察增强 insights-v1（2026-11-23，分支 feature/insights-v1，worktree D:\project\cs2-improvements）
+
+> 调研（awpy/cs-demo-manager/cs2-highlights-maker 等开源对标）后落地：解析层零换库（awpy 3.3.0 数据集吃满），上层功能四方向补齐。SCHEMA 1.0→1.1 向后兼容（旧字段保留，新增字段可 null）。
+
+### ✅ P0：bug 修复 + 道具分析 v2（补短板：强狙击弱道具）
+- ✅ weekly.py `import json` 缺失 → AI 周评 NameError 被 except 吞掉静默失效（标记断言测试防回归）
+- ✅ bili_learn `_ai_summarize` AI 返回非 JSON → AttributeError 崩任务（降级为原文标注 + 空卡）
+- ✅ 炸弹/世界击杀（planted_c4）无攻击者坐标 → `_xyz_dist` TypeError 崩解析（真实 demo 3/114 行实测触发；死亡不入距离桶、对枪矩阵跳过）
+- ✅ 闪光有效性敌友拆分（awpy blinds 数据集替代 demoparser2 补丁）：enemy_blind_s / team_blind_s / 敌方中位数 / 闪光浪费率
+- ✅ 分道具购买 vs 使用率 usage（item_events purchase × grenades 投掷，incendiary 合火）：{bought, thrown, waste_rate}；真实 demo 实测 **molotov 浪费率 0.5 为最短板**；详情 Drawer 浪费 ≥30% 红标
+- ✅ 覆盖率门禁恢复：二期欠账 84.7% → **90.09%**（补 bili_learn 编排 / bili_api / ai_client provider 分支 / chat 边界契约）
+
+### ✅ P1：AI 复盘深度
+- ✅ 经济复盘（round_economy × rounds join）：eco_win_rate（抗压）/ full_buy_lose_rate（资源转化）+ 满编败率 >50% 硬红线（report.py 红线序：近战 > 经济 > 道具 > 劣势枪位）；真实 demo eco 1.0 / 满编败 0.222
+- ✅ 对枪口径补全（damages 交火窗口，击杀切窗）：first_strike_win_rate / mirror_win_rate 补二期 null；真实 demo 0.5 / 0.667
+- ✅ 高光检测 `services/highlight.py`（借鉴 cs2-highlights-maker 评分思路纯解析版）：回合内 >20s 击杀聚类 → 评分（kills×2+爆头+特殊击杀+多杀加成+胜局+残局起点）→ Top5；真实 demo 检出 R15 残局双杀(6分)；详情 Drawer 高光表（残局🔥标记）
+
+### ✅ P2：可视化与长期追踪
+- ✅ 道具落点 `collect_utility_spots`：user 侧烟/火落点 + 相关致盲被闪位置；前端 UtilityScatter 组件（复用雷达底图与官方坐标映射，三色散点）
+- ✅ 长期追踪端点 `GET /api/matches/stats/trends`（逐场聚合点 + 地图胜率）+ 前端「趋势」Tab（rating/ADR 逐场折线 + 道具指标趋势 + 地图胜率条形）
+- ✅ 重复死亡模式 `services/death_patterns.py`：跨场 500unit(≈9.5m) 网格聚合 ≥3 次 → 周报「惯性死亡点」段落 + AI 教练上下文注入
+
+### 验收证据（2026-11-23）
+- 后端全量 pytest 全绿，覆盖率 **90.09%** ≥ 87% 门禁（只升不降，下修基线待用户确认）
+- 真实 demo（9217780881059103244，dust2，64tick）端到端：SCHEMA 1.1 四维 + usage + highlights + spots 全部产出，3.9-4.6s/1MB 峰值内存
+- Mock 全链路（worktree 服务 8102 + 主库数据目录）：`pushed: true, mv_uuid=12642d38…`（SCHEMA 1.1 payload 真实推送 MindVault）
+- 前端 `tsc --noEmit` PASS + `npm run build` PASS（趋势 Tab / 道具散点 / 高光表 / 指标卡四项 UI）
+
+### Backlog（三期未做，记录待后续）
+- HLAE + mirv_streams 全自动高光录制（cs2-highlights-maker 方案：Windows+CS2 满足，但需 -insecure 沙箱且 HLAE 需跟随 CS2 版本，禁 VAC 服务器）
+- 2D 回放动画（cs-demo-manager 式 awpy snapshots 逐 tick 采样）
+- 弱道具 → B站自动检索教学闭环（死亡模式点位 → 关键词 → cs2-learn；CS2HQ 独有优势方向）
+- GitHub 私有仓库推送（待 gh auth login 后执行：gh repo create yingdijiudanche/cs2hq --private --source . --push）
 
 ## 禁区与回滚
 
