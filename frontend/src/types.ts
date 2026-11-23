@@ -27,7 +27,12 @@ export interface FourDimAnalysisShape {
     team_blind_s?: number | null;
     usage?: { grenade_type: string; bought: number; thrown: number; waste_rate: number | null }[];
   };
-  duels?: { by_weapon_distance?: { distance: string; weapon: string; kills?: number; deaths?: number; win_rate?: number | null }[] };
+  duels?: { by_weapon_distance?: { distance: string; weapon: string; kills?: number; deaths?: number; win_rate?: number | null }[]; first_strike_win_rate?: number | null; mirror_win_rate?: number | null };
+  highlights?: {
+    round_no: number | null; start_tick?: number | null; end_tick?: number | null;
+    kills: number; headshots: number; score?: number | null; label?: string | null;
+    round_won?: boolean | null; clutch?: boolean | null;
+  }[];
   meta?: { parser?: string; cost_s?: number | null; peak_mem_mb?: number | null };
 }
 

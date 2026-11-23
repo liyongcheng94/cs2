@@ -288,6 +288,30 @@ function MatchesPage() {
                     ]}
                   />
                 ) : null}
+                {detail.data.analysis.highlights?.length ? (
+                  <Table
+                    size="small"
+                    pagination={false}
+                    rowKey={(r) => `${r.round_no}-${r.start_tick}`}
+                    dataSource={detail.data.analysis.highlights}
+                    columns={[
+                      { title: "回合", dataIndex: "round_no", width: 60 },
+                      {
+                        title: "时刻", dataIndex: "label", width: 80,
+                        render: (v: string | null, r) => (
+                          <span>{v ?? `${r.kills}杀`}{r.clutch ? " 🔥残局" : ""}</span>
+                        ),
+                      },
+                      { title: "击杀", dataIndex: "kills", width: 60 },
+                      { title: "爆头", dataIndex: "headshots", width: 60 },
+                      { title: "评分", dataIndex: "score", width: 60 },
+                      {
+                        title: "回合结果", dataIndex: "round_won", width: 90,
+                        render: (v: boolean | null) => (v == null ? "—" : v ? "胜" : "负"),
+                      },
+                    ]}
+                  />
+                ) : null}
                 <Button size="small" loading={loadV1.isPending} onClick={() => loadV1.mutate()}>
                   载入全场详细数据（10 人）
                 </Button>
