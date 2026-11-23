@@ -160,18 +160,17 @@ describe("LearnPage L2 道具库", () => {
 });
 
 describe("LearnPage 学习入口", () => {
-  test("BV 前缀走 bvid、纯数字走 up_mid、其余走 keyword", async () => {
-    renderPage();
+  test("BV 前缀走 bvid、纯数字走 up_mid、其余走 keyword", async () => {    renderPage();
     await waitFor(() => expect(screen.getByPlaceholderText("关键词 / BV 号 / UP主 mid 号")).toBeTruthy());
     const input = screen.getByPlaceholderText("关键词 / BV 号 / UP主 mid 号") as HTMLInputElement;
     const btn = screen.getByRole("button", { name: "学 习" });
 
-    fireEvent.change(input, { target: { value: "BV1abcdefgH" } });
+    fireEvent.change(input, { target: { value: "BV1abcdefgHiJ" } });
     fireEvent.click(btn);
     await waitFor(() =>
       expect(apiPostMock).toHaveBeenCalledWith("/tasks", {
         type: "bili_learn",
-        payload: { bvid: "BV1abcdefgH" },
+        payload: { bvid: "BV1abcdefgHiJ" },
       }),
     );
 
@@ -190,6 +189,31 @@ describe("LearnPage 学习入口", () => {
       expect(apiPostMock).toHaveBeenCalledWith("/tasks", {
         type: "bili_learn",
         payload: { keyword: "Mirage 道具" },
+      }),
+    );
+  });
+
+  test("含 BV 的完整视频链接 / b23.tv 短链也走 bvid（否则误入 keyword 检索）", async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByRole("button", { name: "学 习" })).toBeTruthy());
+    const input = screen.getByPlaceholderText("关键词 / BV 号 / UP主 mid 号") as HTMLInputElement;
+    const btn = screen.getByRole("button", { name: "学 习" });
+
+    fireEvent.change(input, { target: { value: "https://www.bilibili.com/video/BV1b1aMziEuE" } });
+    fireEvent.click(btn);
+    await waitFor(() =>
+      expect(apiPostMock).toHaveBeenCalledWith("/tasks", {
+        type: "bili_learn",
+        payload: { bvid: "https://www.bilibili.com/video/BV1b1aMziEuE" },
+      }),
+    );
+
+    fireEvent.change(input, { target: { value: "https://b23.tv/abc123" } });
+    fireEvent.click(btn);
+    await waitFor(() =>
+      expect(apiPostMock).toHaveBeenCalledWith("/tasks", {
+        type: "bili_learn",
+        payload: { bvid: "https://b23.tv/abc123" },
       }),
     );
   });

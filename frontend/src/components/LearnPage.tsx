@@ -319,7 +319,8 @@ export function LearnPage() {
             type="primary"
             loading={learn.isPending}
             onClick={() => {
-              const body = kw.toUpperCase().startsWith("BV")
+              // 含 BV 号（裸 BV / 完整链接 / b23.tv 短链）→ 单视频解析（后端 resolve_bvid 提取）
+              const body = /BV[0-9A-Za-z]{10}/.test(kw.toUpperCase()) || /b23\.tv/i.test(kw)
                 ? { bvid: kw }
                 : /^\d+$/.test(kw)
                   ? { up_mid: kw }
