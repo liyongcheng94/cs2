@@ -86,7 +86,7 @@ async def test_bili_learn_handler_degraded_flow(client, monkeypatch, tmp_path):
     import app.services.bili_learn as bl
 
     async def fake_search(keyword, sess, page=1):
-        return [{"bvid": "BV1L1", "title": "教学视频", "author": "UP", "pubdate": 1}]
+        return [{"bvid": "BV1L1", "title": "CS2 道具教学视频", "author": "UP", "pubdate": 1}]
 
     async def fake_fetch(bvid, sess):
         return "字幕文本"
@@ -115,7 +115,7 @@ async def test_bili_learn_handler_degraded_flow(client, monkeypatch, tmp_path):
     body = client.get(f"/api/tasks/{task_id}").json()
     assert body["status"] == "success", body["error"]
     assert body["result"]["results"][0]["status"] == "ok"
-    assert pushed == ["教学视频"]
+    assert pushed == ["CS2 道具教学视频"]
 
     from sqlmodel import select
 

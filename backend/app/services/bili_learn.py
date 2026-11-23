@@ -44,6 +44,27 @@ def _push_note(mv, title: str, content: str, topic: str, source_hash: str) -> di
     return {}
 
 
+# CS2 相关性判定：游戏名/地图名/战术道具词白名单（2026-11-23 实测修复：
+# 「持械入宋」等剧集解说混进关键词检索结果被学习+推送）
+_CS2_TOKENS = (
+    "cs2", "cs:go", "csgo", "counter-strike", "反恐精英",
+    "dust2", "de_dust", "mirage", "inferno", "nuke", "ancient", "anubis",
+    "train", "vertigo", "overpass", "cache", "office", "炼狱小镇",
+    "荒漠迷城", "炙热沙城", "死亡游乐园", "殒命大厦", "远古遗迹", "列车停放站",
+    "道具", "烟雾弹", "闪光弹", "燃烧弹", "烟雾", "手雷", "雷点", "点位",
+    "爆弹", "假打", "rush", "eco", "急停", "压枪", "爆头", "对枪", "架枪",
+    "peek", "拉枪线", "身位", "拆弹", "下包", "残局", "身法", "跳台",
+)
+
+
+def _looks_like_cs2_video(title: str | None) -> bool:
+    """标题含 CS2 游戏名、地图名或战术道具语义词才视为相关（无标题一律不相关）。"""
+    if not title:
+        return False
+    low = title.lower()
+    return any(tok in low for tok in _CS2_TOKENS)
+
+
 async def bili_learn_handler(task: Task, session_factory_fn: Callable[[], Session]) -> dict:
     payload = task.payload or {}
     bvid: str = payload.get("bvid") or ""
@@ -70,7 +91,11 @@ async def bili_learn_handler(task: Task, session_factory_fn: Callable[[], Sessio
         targets = await search_user_videos(up_mid, sess, limit=3)  # UP 最新 3 条
         await asyncio.sleep(1)
     elif keyword:
-        targets = (await search_videos(keyword, sess, page=1))[:5]  # 每任务最多 5 条，限速在下方
+        hits = await search_videos(keyword, sess, page=1)  # 每任务最多 5 条，限速在下方
+        targets = [t for t in hits if _looks_like_cs2_video(t.get("title"))][:5]
+        skipped = len(hits) - len(targets)
+        if skipped > 0:
+            logger.info(f"[B站学习] keyword={keyword!r} 相关性过滤剔除 {skipped} 条无关视频")
         await asyncio.sleep(1)
     else:
         raise ValueError("payload 需 bvid / up_mid / keyword 之一")
