@@ -13,3 +13,4 @@ htmlcov/
 qa/
 *.log
 .DS_Store
+frontend/.vite/
