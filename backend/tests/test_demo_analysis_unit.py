@@ -7,6 +7,7 @@ from app.services.demo_analysis import (
     _round_of_tick,
     analyze_deaths,
     analyze_duels,
+    analyze_economy,
     analyze_utility,
     distance_bucket,
     weapon_class,
@@ -280,3 +281,34 @@ def test_schema_version_bumped_to_1_1():
 
     assert SCHEMA_VERSION == "1.1"
     assert FourDimAnalysis(match_id="m").schema_version == "1.1"
+
+
+def test_analyze_economy_win_pattern():
+    """
+    Given user(ct) 5 回合经济：eco 胜1负1、full 胜2负1
+    When  analyze_economy
+    Then  eco_win_rate=0.5（抗压能力）、full_buy_lose_rate=0.333（资源转化），
+          effective_buy_ratio 仍 None（无总资金列）
+    """
+    sid = 111
+    rounds = pl.DataFrame([
+        {"round_num": 1, "start_tick": 0, "official_end_tick": 1000, "winner_side": "t"},
+        {"round_num": 2, "start_tick": 1001, "official_end_tick": 2000, "winner_side": "ct"},
+        {"round_num": 3, "start_tick": 2001, "official_end_tick": 3000, "winner_side": "t"},
+        {"round_num": 4, "start_tick": 3001, "official_end_tick": 4000, "winner_side": "ct"},
+        {"round_num": 5, "start_tick": 4001, "official_end_tick": 5000, "winner_side": "ct"},
+    ])
+    demo = SimpleNamespace(round_economy=pl.DataFrame([
+        {"round_num": 1, "side": "ct", "equipment_value": 1200, "buy_type": "eco", "n_players": 5},
+        {"round_num": 2, "side": "ct", "equipment_value": 1800, "buy_type": "eco", "n_players": 5},
+        {"round_num": 3, "side": "ct", "equipment_value": 42000, "buy_type": "full", "n_players": 5},
+        {"round_num": 4, "side": "ct", "equipment_value": 45000, "buy_type": "full", "n_players": 5},
+        {"round_num": 5, "side": "ct", "equipment_value": 41000, "buy_type": "full", "n_players": 5},
+        {"round_num": 1, "side": "t", "equipment_value": 40000, "buy_type": "full", "n_players": 5},
+    ]))
+    kills = _kills_frame([])
+    dim = analyze_economy(demo, kills, rounds, sid, "ct")
+    assert dim.eco_win_rate == 0.5
+    assert dim.full_buy_lose_rate == 0.333
+    assert dim.effective_buy_ratio is None
+    assert len(dim.buy_decisions) == 5  # 只统计 user 侧
