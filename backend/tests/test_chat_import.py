@@ -111,3 +111,69 @@ class TestChatImport:
         assert second["imported"] == 0  # 幂等：不再落库
         msgs = client.get(f"/api/chat/sessions/{first['session_id']}/messages").json()
         assert len(msgs) == 1
+
+
+class TestBindImages:
+    @pytest.mark.anyio
+    async def test_bind_images_and_boundaries(self, client, png_bytes):
+        """补绑图片 → image_ids 写入；越界 400 / 图不存在 404 / 重复绑幂等。"""
+        up = client.post(
+            "/api/chat/images",
+            files=[("files", ("s.png", png_bytes, "image/png"))],
+        ).json()[0]
+        sid = client.post("/api/chat/import", json={
+            "title": "t", "share_key": "bind-k",
+            "messages": [{"role": "user", "content": "a"}, {"role": "user", "content": "b"}],
+        }).json()["session_id"]
+
+        ok = client.post("/api/chat/import/bind-images", json={
+            "session_id": sid, "bindings": [{"image_id": up["id"], "message_index": 1}]})
+        assert ok.status_code == 200 and ok.json()["bound"] == 1
+        msgs = client.get(f"/api/chat/sessions/{sid}/messages").json()
+        assert msgs[1]["image_ids"] == [up["id"]]
+
+        # 重复绑 → 幂等（不重复追加）
+        dup = client.post("/api/chat/import/bind-images", json={
+            "session_id": sid, "bindings": [{"image_id": up["id"], "message_index": 1}]})
+        assert dup.status_code == 200
+        msgs = client.get(f"/api/chat/sessions/{sid}/messages").json()
+        assert msgs[1]["image_ids"] == [up["id"]]
+
+        # 越界 → 400
+        oob = client.post("/api/chat/import/bind-images", json={
+            "session_id": sid, "bindings": [{"image_id": up["id"], "message_index": 9}]})
+        assert oob.status_code == 400
+
+        # 图不存在 → 404
+        missing = client.post("/api/chat/import/bind-images", json={
+            "session_id": sid, "bindings": [{"image_id": 99999, "message_index": 0}]})
+        assert missing.status_code == 404
+
+
+class TestDownloadImage:
+    @pytest.mark.anyio
+    async def test_download_failure_returns_none(self, client, monkeypatch):
+        """_download_image 非 200 / 异常 → None（导入不阻断）。"""
+        from app.api.chat_api import _download_image
+
+        class FakeResp:
+            status_code = 503
+            content = b""
+
+        monkeypatch.setattr(httpx, "get", lambda *a, **k: FakeResp())
+        assert _download_image("http://x/y.png") is None
+
+        def boom(*a, **k):
+            raise OSError("net down")
+
+        monkeypatch.setattr(httpx, "get", boom)
+        assert _download_image("http://x/y.png") is None
+
+
+class TestOcr:
+    @pytest.mark.anyio
+    async def test_ocr_missing_file_returns_empty(self, monkeypatch, tmp_path):
+        """OCR 输入文件不存在 → 空串（不炸）。"""
+        from app.services.ocr import ocr_image
+
+        assert ocr_image(tmp_path / "nope.png") == ""
