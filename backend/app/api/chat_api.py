@@ -33,38 +33,41 @@ def _chat_uploads_dir(image_id: int) -> Path:
 
 
 @router.post("/images")
-async def upload_image(file: UploadFile = File(...), session: SessionDep = None) -> dict:
-    """上传对话图片：落 data/uploads/chat/{id}/，即刻 OCR（AI 以文字间接看图）。"""
-    if file.content_type not in _ALLOWED_MIME:
-        raise HTTPException(status_code=400, detail=f"仅支持图片（jpeg/png/webp），收到 {file.content_type}")
-    data = await file.read()
-    if len(data) > _MAX_IMG_BYTES:
-        raise HTTPException(status_code=400, detail="图片超过 5MB 限制")
-
+async def upload_images(files: list[UploadFile] = File(...), session: SessionDep = None) -> list[dict]:
+    """上传对话图片（可多张）：落 data/uploads/chat/{id}/，即刻 OCR（AI 以文字间接看图）。"""
+    out: list[dict] = []
     from ..models import ChatImage
 
-    ext = Path(file.filename or "img.png").suffix.lower() or ".png"
-    if ext not in _EXT_MIME:
-        ext = ".png"
-    img = ChatImage(filename="")
-    session.add(img)
-    session.commit()
-    session.refresh(img)
+    for file in files:
+        if file.content_type not in _ALLOWED_MIME:
+            raise HTTPException(status_code=400, detail=f"仅支持图片（jpeg/png/webp），收到 {file.content_type}")
+        data = await file.read()
+        if len(data) > _MAX_IMG_BYTES:
+            raise HTTPException(status_code=400, detail="图片超过 5MB 限制")
 
-    filename = f"{uuid.uuid4().hex}{ext}"
-    target = _chat_uploads_dir(img.id) / filename
-    target.write_bytes(data)
-    img.filename = filename
-    img.ocr_text = ocr_image(target)
-    session.add(img)
-    session.commit()
-    session.refresh(img)
-    return {
-        "id": img.id,
-        "url": f"/api/chat/uploads/{img.id}/{filename}",
-        "filename": filename,
-        "ocr_text": img.ocr_text,
-    }
+        ext = Path(file.filename or "img.png").suffix.lower() or ".png"
+        if ext not in _EXT_MIME:
+            ext = ".png"
+        img = ChatImage(filename="")
+        session.add(img)
+        session.commit()
+        session.refresh(img)
+
+        filename = f"{uuid.uuid4().hex}{ext}"
+        target = _chat_uploads_dir(img.id) / filename
+        target.write_bytes(data)
+        img.filename = filename
+        img.ocr_text = ocr_image(target)
+        session.add(img)
+        session.commit()
+        session.refresh(img)
+        out.append({
+            "id": img.id,
+            "url": f"/api/chat/uploads/{img.id}/{filename}",
+            "filename": filename,
+            "ocr_text": img.ocr_text,
+        })
+    return out
 
 
 @router.get("/uploads/{image_id}/{filename}", include_in_schema=False)

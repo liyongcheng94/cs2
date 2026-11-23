@@ -51,11 +51,10 @@ class TestChatImageUpload:
         """上传成功 → 返回 id/url/ocr_text；文件落 data/uploads/chat/。"""
         resp = client.post(
             "/api/chat/images",
-            files={"file": ("shot.png", png_bytes, "image/png")},
+            files=[("files", ("shot.png", png_bytes, "image/png"))],
         )
         assert resp.status_code == 200
-        data = resp.json()
-        assert data["id"] > 0
+        data = resp.json()[0]
         assert data["url"].startswith("/api/chat/uploads/")
         assert data["filename"].endswith(".png")
         # 纯白图 OCR 文本可能为空列表 → ocr_text 为 ""（允许空，不炸）
@@ -66,7 +65,7 @@ class TestChatImageUpload:
         """非图 MIME → 400。"""
         resp = client.post(
             "/api/chat/images",
-            files={"file": ("a.txt", b"hello", "text/plain")},
+            files=[("files", ("a.txt", b"hello", "text/plain"))],
         )
         assert resp.status_code == 400
 
@@ -76,7 +75,7 @@ class TestChatImageUpload:
         big = png_bytes + b"\0" * (5 * 1024 * 1024 + 1)
         resp = client.post(
             "/api/chat/images",
-            files={"file": ("big.png", big, "image/png")},
+            files=[("files", ("big.png", big, "image/png"))],
         )
         assert resp.status_code == 400
 
@@ -86,8 +85,8 @@ class TestChatImageServe:
     async def test_get_upload_serves_file(self, client, png_bytes):
         up = client.post(
             "/api/chat/images",
-            files={"file": ("shot.png", png_bytes, "image/png")},
-        ).json()
+            files=[("files", ("shot.png", png_bytes, "image/png"))],
+        ).json()[0]
         resp = client.get(up["url"])
         assert resp.status_code == 200
         assert resp.headers["content-type"] == "image/png"
@@ -104,8 +103,8 @@ class TestChatMessageImageBinding:
         """POST /chat 带 image_ids → 消息落库带 image_ids，OCR 文本并入 prompt。"""
         up = client.post(
             "/api/chat/images",
-            files={"file": ("s.png", png_bytes, "image/png")},
-        ).json()
+            files=[("files", ("s.png", png_bytes, "image/png"))],
+        ).json()[0]
 
         resp = client.post(
             "/api/chat",
