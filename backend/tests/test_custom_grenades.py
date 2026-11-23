@@ -9,6 +9,7 @@
   F1 Given 库里有视频卡+自建卡 When GET /bili/grenades?source=video Then 只返回视频卡
   F2 When ?source=custom Then 只返回自建卡
   F3 When ?point=A1 Then 点位精确（大小写不敏感）匹配
+  F3b When ?point=拱（部分词）Then 点位子串匹配（模糊搜索，2026-11-23 用户反馈空结果）
   F4 列表返回新增 source 字段（"video"/"custom"）
 """
 from __future__ import annotations
@@ -100,6 +101,17 @@ class TestSourceFilter:
         rows = client.get("/api/bili/grenades", params={"point": "a1"}).json()
         assert all((r["point"] or "").lower() == "a1" for r in rows)
         assert len(rows) == 1
+
+    def test_filter_point_substring(self, client):
+        """F3b：?point=拱（部分词）→ 子串匹配（模糊搜索）。用户输「拱门」或「拱」都应命中「拱门」卡。"""
+        _seed_video_card(point="拱门")
+        _seed_video_card(point="A1", bvid="BV1seedAAA2")
+        rows = client.get("/api/bili/grenades", params={"point": "拱"}).json()
+        assert len(rows) == 1
+        assert rows[0]["point"] == "拱门"
+        # 完整词同样命中
+        rows2 = client.get("/api/bili/grenades", params={"point": "拱门"}).json()
+        assert len(rows2) == 1
 
     def test_list_returns_source_field(self, client):
         """F4：列表每行带 source 字段。"""

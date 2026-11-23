@@ -60,7 +60,7 @@ def list_grenades(
             continue
         if source == "custom" and r.bvid is not None:
             continue
-        if point and (r.point or "").lower() != point.lower():
+        if point and point.lower() not in (r.point or "").lower():
             continue
         out.append({
             "id": r.id,

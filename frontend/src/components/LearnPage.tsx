@@ -354,7 +354,6 @@ function GrenadeLibrary() {
 
   if (grenades.isLoading) return <Spin />;
   const all = grenades.data ?? [];
-  if (!all.length) return <Empty description="道具库为空：学习带点位教学的视频后自动收录" />;
 
   // 收藏置顶（grill-me v2 1d）
   const sorted = [...all].sort((a, b) => Number(b.favorited) - Number(a.favorited));
@@ -415,6 +414,11 @@ function GrenadeLibrary() {
           </Button>
         ))}
       </Space>
+      {all.length === 0 ? (
+        <Empty description="道具库为空：学习带点位教学的视频后自动收录，或点「新建道具」自建" />
+      ) : shown.length === 0 ? (
+        <Empty description="没有匹配的道具卡：换个点位关键词，或清除来源/地图/分区筛选试试" />
+      ) : null}
       <Row gutter={[12, 12]}>
         {shown.map((g) => {
           const ts = tsToSeconds(g.video_ts);
