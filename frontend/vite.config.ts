@@ -14,4 +14,8 @@ export default defineConfig({
     },
     allowedHosts: [".trycloudflare.com", ".kumshing.dev"],
   },
+  test: {
+    environment: "jsdom",
+    globals: true,
+  },
 });
