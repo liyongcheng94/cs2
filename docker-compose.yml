@@ -1,0 +1,36 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: CS2HQ.backend.dockerfile
+    container_name: cs2hq-backend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8101:8101"
+    volumes:
+      - ./data:/app/data          # SQLite + 日志 + 凭证持久化
+    env_file:
+      - cs2hq.env                 # 密钥文件（.env 名称被安全策略禁写，用别名；不入 git）
+    environment:
+      - CS2HQ_DATA_DIR=/app/data
+      - CS2HQ_SCHEDULER=1
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8101/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: CS2HQ.frontend.dockerfile
+      args:
+        VITE_BASE: /cs2hq/        # 路径前缀部署：资源与 API 都带 /cs2hq/ 前缀
+    container_name: cs2hq-frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5174:80"       # /api 已由容器内 nginx 反代到 backend
+    depends_on:
+      backend:
+        condition: service_healthy

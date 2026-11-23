@@ -12,6 +12,6 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
-    allowedHosts: [".trycloudflare.com"],
+    allowedHosts: [".trycloudflare.com", ".kumshing.dev"],
   },
 });

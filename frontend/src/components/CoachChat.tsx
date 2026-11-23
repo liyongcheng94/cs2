@@ -34,7 +34,7 @@ export function CoachChat() {
   const [streaming, setStreaming] = useState<string | null>(null);
   const send = useMutation({
     mutationFn: async (content: string) => {
-      const resp = await fetch("/api/chat/stream", {
+      const resp = await fetch(`${import.meta.env.BASE_URL}api/chat/stream`.replace("//api", "/api"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ session_id: activeId, content }),
