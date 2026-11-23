@@ -76,9 +76,9 @@ function fmtDuration(s: number | null | undefined): string {
  * 「未提供」等无效值 → 空串（不带 t 参数）。
  */
 function tsToSeconds(ts: string | null | undefined): string {
-  const s = (ts ?? "").trim();
-  if (!s || /未提供|未提及|n\/a/i.test(s)) return "";
-  const mmss = s.match(/^(\d{1,2}):([0-5]?\d)(?:\.(\d+))?$/);
+  const s = (ts ?? "").trim().replace(/^约\s*/, ""); // AI 偶尔输出「约15:30」
+  if (!s || /未提供|未提及|未知|n\/a/i.test(s)) return "";
+  const mmss = s.match(/^(\d{1,3}):([0-5]?\d)(?:\.(\d+))?$/);
   if (mmss) {
     const base = Number(mmss[1]) * 60 + Number(mmss[2]);
     const frac = mmss[3] ? `.${mmss[3]}` : "";
@@ -87,6 +87,8 @@ function tsToSeconds(ts: string | null | undefined): string {
   if (/^\d+(\.\d+)?$/.test(s)) return s; // 已是秒
   return ""; // 未知格式不带 t，宁可跳视频开头也不跳错位置
 }
+
+export { tsToSeconds };
 
 interface VideoRow {
   bvid: string;

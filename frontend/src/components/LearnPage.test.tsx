@@ -8,7 +8,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import { LearnPage } from "./LearnPage";
+import { LearnPage, tsToSeconds } from "./LearnPage";
 
 // mock api client（组件经 apiGet/apiPost 取数）
 vi.mock("../api/client", () => ({
@@ -159,6 +159,20 @@ describe("LearnPage L2 道具库", () => {
     // 第二张卡 03:24 → 3*60+24=204 秒
     const fire = anchors.find((a) => (a.getAttribute("href") ?? "").includes("t=204"));
     expect(fire).toBeTruthy();
+  });
+
+  test("tsToSeconds 边界：约15:30 / 698 / 698.1 / 未知格式", () => {
+    // 「约」前缀（真实 AI 输出见过）→ 剥掉后正常换算
+    expect(tsToSeconds("约15:30")).toBe("930");
+    expect(tsToSeconds("约15:30.5")).toBe("930.5");
+    // 纯秒原样透传
+    expect(tsToSeconds("698")).toBe("698");
+    expect(tsToSeconds("698.1")).toBe("698.1");
+    // 无效值 → 空
+    expect(tsToSeconds("未提供")).toBe("");
+    expect(tsToSeconds("未知")).toBe("");
+    expect(tsToSeconds("")).toBe("");
+    expect(tsToSeconds("大概在中间")).toBe("");
   });
 });
 
