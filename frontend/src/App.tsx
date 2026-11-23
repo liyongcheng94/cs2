@@ -22,6 +22,7 @@ import {
 } from "antd";
 import { apiGet, apiPost, apiPut } from "./api/client";
 import { DeathScatter } from "./components/DeathScatter";
+import { UtilityScatter } from "./components/UtilityScatter";
 import { DuelHeatmap } from "./components/DuelHeatmap";
 import { CoachChat } from "./components/CoachChat";
 import { SeasonTrends } from "./components/SeasonTrends";
@@ -250,6 +251,7 @@ function MatchesPage() {
               <>
                 <DuelHeatmap analysis={detail.data.analysis} />
                 <DeathScatter analysis={detail.data.analysis} mapEn={detail.data.match.map_en} />
+                <UtilityScatter analysis={detail.data.analysis} mapEn={detail.data.match.map_en} />
                 <Row gutter={16}>
                   {detail.data.analysis.deaths?.disadvantaged_rate != null ? (
                     <Col span={8}><Statistic title="劣势枪位死亡率" value={(detail.data.analysis.deaths.disadvantaged_rate * 100).toFixed(0) + "%"} /></Col>

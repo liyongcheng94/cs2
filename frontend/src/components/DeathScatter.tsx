@@ -13,7 +13,7 @@ interface MapMeta {
 }
 
 let MAP_DATA: Record<string, MapMeta> | null = null;
-async function loadMapData(): Promise<Record<string, MapMeta>> {
+export async function loadMapData(): Promise<Record<string, MapMeta>> {
   if (MAP_DATA) return MAP_DATA;
   const resp = await fetch("/radar/map_data.json");
   MAP_DATA = (await resp.json()) as Record<string, MapMeta>;
