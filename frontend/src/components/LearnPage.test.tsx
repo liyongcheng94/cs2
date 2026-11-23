@@ -148,14 +148,17 @@ describe("LearnPage L2 道具库", () => {
     expect(screen.getByText("炼狱小镇 · 香蕉道")).toBeTruthy();
   });
 
-  test("video_ts=未提供 时跳转链接不带 t 参数", async () => {
+  test("video_ts 换算成秒：03:24 → t=204（B站 t 参数是秒，拼 0324 会跳到 5:24）", async () => {
     renderPage();
     await waitFor(() => expect(document.querySelectorAll("a").length).toBeGreaterThan(0));
     const anchors = [...document.querySelectorAll("a")] as HTMLAnchorElement[];
-    const vip = anchors.find((a) => (a.getAttribute("href") ?? "").includes("bilibili.com/video/BV1wallcardA") && !(a.getAttribute("href") ?? "").includes("t="));
-    expect(vip).toBeTruthy(); // video_ts=未提供 → 不带 t 参数
-    const fire = anchors.find((a) => (a.getAttribute("href") ?? "").includes("t=0324"));
-    expect(fire).toBeTruthy(); // 03:24 → t=0324
+    // 第一张卡 video_ts=未提供 → 无 t 参数
+    const noTs = anchors.find((a) => (a.getAttribute("href") ?? "").includes("bilibili.com/video/BV1wallcardA"));
+    expect(noTs).toBeTruthy();
+    expect((noTs!.getAttribute("href") ?? "").includes("?t=")).toBe(false);
+    // 第二张卡 03:24 → 3*60+24=204 秒
+    const fire = anchors.find((a) => (a.getAttribute("href") ?? "").includes("t=204"));
+    expect(fire).toBeTruthy();
   });
 });
 

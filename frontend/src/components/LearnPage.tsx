@@ -69,6 +69,25 @@ function fmtDuration(s: number | null | undefined): string {
   return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
+/**
+ * B站 ?t= 参数是【秒数】（支持小数，如 ?t=698.1）。
+ * AI 输出的 video_ts 可能是 "03:24"（分:秒）→ 换算 204；
+ * 已经是纯数字/小数（"698" / "698.1"）→ 原样透传；
+ * 「未提供」等无效值 → 空串（不带 t 参数）。
+ */
+function tsToSeconds(ts: string | null | undefined): string {
+  const s = (ts ?? "").trim();
+  if (!s || /未提供|未提及|n\/a/i.test(s)) return "";
+  const mmss = s.match(/^(\d{1,2}):([0-5]?\d)(?:\.(\d+))?$/);
+  if (mmss) {
+    const base = Number(mmss[1]) * 60 + Number(mmss[2]);
+    const frac = mmss[3] ? `.${mmss[3]}` : "";
+    return `${base}${frac}`;
+  }
+  if (/^\d+(\.\d+)?$/.test(s)) return s; // 已是秒
+  return ""; // 未知格式不带 t，宁可跳视频开头也不跳错位置
+}
+
 interface VideoRow {
   bvid: string;
   title: string;
@@ -90,12 +109,6 @@ interface GrenadeRow {
   video_ts: string | null;
   bvid: string | null;
   content_md: string;
-}
-
-/** 统一视频 ts：AI 偶尔输出"未提供"，一律转成空便于跳转参数拼接 */
-function cleanTs(ts: string | null | undefined): string {
-  if (!ts) return "";
-  return /未提供|未提及|n\/a/i.test(ts) ? "" : ts;
 }
 
 // ---------- L1 视频卡片墙 ----------
@@ -244,7 +257,7 @@ function GrenadeLibrary() {
       </Space>
       <Row gutter={[12, 12]}>
         {shown.map((g) => {
-          const ts = cleanTs(g.video_ts);
+          const ts = tsToSeconds(g.video_ts);
           return (
             <Col key={g.id} xs={24} sm={12} lg={8}>
               <Card size="small" title={<span style={{ fontSize: 13 }}>{g.map_name} · {g.point ?? "-"}</span>}>
@@ -264,7 +277,7 @@ function GrenadeLibrary() {
                       size="small"
                       type="link"
                       style={{ padding: 0 }}
-                      href={`https://www.bilibili.com/video/${g.bvid}${ts ? `?t=${ts.replace(/[^0-9]/g, "")}` : ""}`}
+                      href={`https://www.bilibili.com/video/${g.bvid}${ts ? `?t=${ts}` : ""}`}
                       target="_blank"
                     >
                       ▶ 视频跳转{ts ? ` @${ts}` : ""}
