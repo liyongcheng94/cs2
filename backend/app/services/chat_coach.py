@@ -126,19 +126,24 @@ def _build_instruction() -> str:
                 f"等级 {d.get('grades')}，爆头率 {hs}，来源：{d.get('source')}"
             )
         # 道具卡索引（最多 30 张，收藏优先）：教练可引用具体卡与视频时间戳
+        # v3 S4 联动：stale（用户上报/评论判过期）不进索引；aging 带时效存疑标注降权
         cards = s.exec(
-            select(GrenadeCard).order_by(GrenadeCard.favorited.desc(), GrenadeCard.id.desc()).limit(30)
+            select(GrenadeCard).order_by(GrenadeCard.favorited.desc(), GrenadeCard.id.desc()).limit(40)
         ).all()
-        if cards:
+        usable = [c for c in cards if (c.health or "alive") != "stale"][:30]
+        if usable:
             idx = "；".join(
                 f"{c.map_name}·{c.point or '?'}·{c.grenade_type or '?'}"
-                + (f"（{c.video_ts}s，BV{c.bvid[2:] if c.bvid else ''}）" if c.video_ts and c.bvid else (f"（{c.video_ts}s）" if c.video_ts else ""))
+                + (f"（BV{c.bvid[2:] if c.bvid else ''}）" if c.bvid else "")
+                + (f"（{c.video_ts}s）" if c.video_ts else "")
                 + ("★" if c.favorited else "")
-                for c in cards
+                + ("⚠时效存疑" if (c.health or "alive") == "aging" else "")
+                for c in usable
             )
             parts.append(
-                f"## 道具卡库（{len(cards)} 张，用户可学的点位道具）\n{idx}\n"
-                "用户问道具时优先引用上表；提到某卡时给出地图/点位/时机，视频时间戳照抄。"
+                f"## 道具卡库（{len(usable)} 张，用户可学的点位道具）\n{idx}\n"
+                "用户问道具时优先引用上表；提到某卡时给出地图/点位/时机，视频时间戳照抄；"
+                "标⚠时效存疑的卡点位可能已因版本更新失效，引用时提醒用户先验证。"
             )
         recent = s.exec(select(Report).order_by(Report.created_at.desc()).limit(3)).all()
         if recent:
