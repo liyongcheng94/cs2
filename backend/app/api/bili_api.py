@@ -5,7 +5,7 @@ import shutil
 import uuid as uuid_mod
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlmodel import select
 
@@ -41,7 +41,13 @@ def list_videos(session: SessionDep) -> list[dict]:
 
 
 @router.get("/grenades")
-def list_grenades(session: SessionDep, map_name: str = "", grenade_type: str = "") -> list[dict]:
+def list_grenades(
+    session: SessionDep,
+    map_name: str = "",
+    grenade_type: str = "",
+    source: str = "",  # v4：video（学习产出）/ custom（用户自建）
+    point: str = "",  # v4：点位精确匹配（大小写不敏感）
+) -> list[dict]:
     stmt = select(GrenadeCard).order_by(GrenadeCard.created_at.desc())
     rows = session.exec(stmt).all()
     out = []
@@ -49,6 +55,12 @@ def list_grenades(session: SessionDep, map_name: str = "", grenade_type: str = "
         if map_name and (r.map_name or "").lower() != map_name.lower():
             continue
         if grenade_type and (r.grenade_type or "").lower() != grenade_type.lower():
+            continue
+        if source == "video" and r.bvid is None:
+            continue
+        if source == "custom" and r.bvid is not None:
+            continue
+        if point and (r.point or "").lower() != point.lower():
             continue
         out.append({
             "id": r.id,
@@ -63,6 +75,7 @@ def list_grenades(session: SessionDep, map_name: str = "", grenade_type: str = "
             "zone": r.zone,
             "favorited": bool(r.favorited),
             "health": r.health or "alive",
+            "source": "custom" if r.bvid is None else "video",  # v4：创建人标记
         })
     return out
 
@@ -84,6 +97,45 @@ def patch_favorite(card_id: int, body: dict, session: SessionDep) -> dict:
     session.add(card)
     session.commit()
     return {"id": card.id, "favorited": card.favorited}
+
+
+@router.post("/grenades/custom")
+async def create_custom_grenade(
+    session: SessionDep,
+    map_name: str = Form(""),
+    point: str = Form(""),
+    grenade_type: str = Form(""),
+    stance: str = Form(""),
+    timing: str = Form(""),
+    content_md: str = Form(""),
+    files: list[UploadFile] | None = None,
+) -> dict:
+    """自建道具卡（v4）：用户手填（Form/multipart，与贴图上传同通道）+ 可选贴图，bvid=None 标记创建人为自己。"""
+    if not map_name.strip():
+        raise HTTPException(status_code=400, detail="map_name 必填")
+    card = GrenadeCard(
+        map_name=map_name.strip(),
+        point=point.strip() or None,
+        grenade_type=grenade_type.strip() or None,
+        stance=stance.strip() or None,
+        timing=timing.strip() or None,
+        content_md=content_md.strip(),
+        source_hash=f"custom:{uuid_mod.uuid4().hex}",  # 自建卡唯一键，防重复提交撞唯一约束
+        bvid=None,
+    )
+    session.add(card)
+    session.commit()
+    session.refresh(card)
+    if files:
+        await upload_images(card.id, files, session)  # 复用既有校验（≤9张/5MB/MIME 白名单）
+    return {
+        "id": card.id,
+        "map_name": card.map_name,
+        "point": card.point,
+        "grenade_type": card.grenade_type,
+        "source": "custom",
+        "bvid": None,
+    }
 
 
 @router.post("/grenades/{card_id}/stale-report")

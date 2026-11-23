@@ -35,8 +35,8 @@ def _seed_video_card(map_name="Mirage", point="A1", bvid="BV1seedAAA1") -> int:
 
 class TestCustomGrenade:
     def test_create_custom_card(self, client):
-        """C1+C4：自建卡落库，无 bvid、source=custom。"""
-        resp = client.post("/api/bili/grenades/custom", json={
+        """C1+C4：自建卡落库，无 bvid、source=custom（JSON 与 multipart 双契约）。"""
+        resp = client.post("/api/bili/grenades/custom", data={
             "map_name": "Mirage", "point": "A1", "grenade_type": "烟雾弹",
             "stance": "A1 火点", "timing": "开局", "content_md": "自己研究的点位",
         })
@@ -66,18 +66,21 @@ class TestCustomGrenade:
         assert len(imgs) == 1
 
     def test_custom_requires_map_name(self, client):
-        """C3：map_name 缺失 → 400，不落库。"""
+        """C3：map_name 缺失 → 400，不落库（JSON 与 multipart 都拦）。"""
         resp = client.post("/api/bili/grenades/custom", json={"content_md": "没地图"})
         assert resp.status_code == 400
+        resp2 = client.post("/api/bili/grenades/custom", data={"content_md": "没地图"})
+        assert resp2.status_code == 400
         with session_factory() as s:
-            assert s.exec(select(GrenadeCard).where(GrenadeCard.source_hash.startswith("custom:"))).first() is None
+            rows = s.exec(select(GrenadeCard).where(GrenadeCard.source_hash.startswith("custom:"))).all()
+            assert rows == []
 
 
 class TestSourceFilter:
     def test_filter_source_video(self, client):
         """F1：?source=video 只返回视频卡。"""
         vid = _seed_video_card()
-        client.post("/api/bili/grenades/custom", json={"map_name": "Mirage", "point": "B", "grenade_type": "闪光弹", "content_md": "自建"})
+        client.post("/api/bili/grenades/custom", data={"map_name": "Mirage", "point": "B", "grenade_type": "闪光弹", "content_md": "自建"})
         rows = client.get("/api/bili/grenades", params={"source": "video"}).json()
         assert all(r["source"] == "video" for r in rows)
         assert any(r["id"] == vid for r in rows)
@@ -85,7 +88,7 @@ class TestSourceFilter:
     def test_filter_source_custom(self, client):
         """F2：?source=custom 只返回自建卡。"""
         _seed_video_card()
-        resp = client.post("/api/bili/grenades/custom", json={"map_name": "Mirage", "point": "B", "grenade_type": "闪光弹", "content_md": "自建"})
+        resp = client.post("/api/bili/grenades/custom", data={"map_name": "Mirage", "point": "B", "grenade_type": "闪光弹", "content_md": "自建"})
         cid = resp.json()["id"]
         rows = client.get("/api/bili/grenades", params={"source": "custom"}).json()
         assert [r["id"] for r in rows] == [cid]
