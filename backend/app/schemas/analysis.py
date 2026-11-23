@@ -94,6 +94,20 @@ class AnalysisMeta(BaseModel):
     peak_mem_mb: float | None = None
 
 
+class HighlightMoment(BaseModel):
+    """高光时刻（1.1，借鉴 cs2-highlights-maker 评分思路的纯解析版）。"""
+
+    round_no: int | None = None
+    start_tick: int | None = None
+    end_tick: int | None = None
+    kills: int = 0
+    headshots: int = 0
+    score: float | None = None
+    label: str | None = None  # 双杀/3K/4K/ACE
+    round_won: bool | None = None
+    clutch: bool | None = None  # 时刻起点队内存活 ≤2（残局近似）
+
+
 class FourDimAnalysis(BaseModel):
     schema_version: str = SCHEMA_VERSION
     match_id: str
@@ -101,6 +115,7 @@ class FourDimAnalysis(BaseModel):
     economy: EconomyDim = Field(default_factory=EconomyDim)
     utility: UtilityDim = Field(default_factory=UtilityDim)
     duels: DuelDim = Field(default_factory=DuelDim)
+    highlights: list[HighlightMoment] = Field(default_factory=list)  # 1.1：TopN 可看性时刻
     meta: AnalysisMeta = Field(
         default_factory=lambda: AnalysisMeta(parser="unknown")
     )

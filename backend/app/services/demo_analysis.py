@@ -33,6 +33,7 @@ from ..schemas.analysis import (
     ThrowEvent,
     UtilityDim,
 )
+from .highlight import detect_highlights
 
 UNIT_TO_M = 0.01905
 
@@ -386,6 +387,7 @@ def run_analysis(dem_path, match_id: str, steam_id: str) -> tuple[FourDimAnalysi
         duels_dim.mirror_win_rate = mirror_rate
         economy_dim = analyze_economy(demo, kills, rounds, sid, user_side)
         utility_dim = analyze_utility(demo, grenades, sid)
+        highlights = detect_highlights(kills, rounds, sid, user_side)
 
         analysis = FourDimAnalysis(
             match_id=match_id,
@@ -393,6 +395,7 @@ def run_analysis(dem_path, match_id: str, steam_id: str) -> tuple[FourDimAnalysi
             economy=economy_dim,
             utility=utility_dim,
             duels=duels_dim,
+            highlights=highlights,
             meta=AnalysisMeta(parser="awpy 3.3.0"),
         )
     finally:

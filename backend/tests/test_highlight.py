@@ -9,7 +9,7 @@ from app.services.highlight import detect_highlights
 
 
 def _kills(rows):
-    cols = ["attacker_steamid", "victim_steamid", "attacker_side", "weapon", "tick",
+    cols = ["attacker_steamid", "victim_steamid", "attacker_side", "victim_side", "weapon", "tick",
             "headshot", "noscope", "penetrated"]
     data = {c: [] for c in cols}
     for r in rows:
@@ -47,15 +47,15 @@ def test_detect_highlights_clusters_and_scores():
         {"attacker_steamid": sid, "victim_steamid": 224, "attacker_side": CT, "weapon": "knife", "tick": 300,
          "headshot": False, "noscope": False, "penetrated": False},
         # R2：队友先死 3 个（残局起点），user 双杀
-        {"attacker_steamid": foe, "victim_steamid": 331, "attacker_side": T, "weapon": "ak47", "tick": 3500,
+        {"attacker_steamid": foe, "victim_steamid": 331, "attacker_side": T, "victim_side": CT, "weapon": "ak47", "tick": 3500,
          "headshot": False, "noscope": False, "penetrated": False},
-        {"attacker_steamid": foe, "victim_steamid": 332, "attacker_side": T, "weapon": "ak47", "tick": 3600,
+        {"attacker_steamid": foe, "victim_steamid": 332, "attacker_side": T, "victim_side": CT, "weapon": "ak47", "tick": 3600,
          "headshot": False, "noscope": False, "penetrated": False},
-        {"attacker_steamid": foe, "victim_steamid": 333, "attacker_side": T, "weapon": "ak47", "tick": 3700,
+        {"attacker_steamid": foe, "victim_steamid": 333, "attacker_side": T, "victim_side": CT, "weapon": "ak47", "tick": 3700,
          "headshot": False, "noscope": False, "penetrated": False},
-        {"attacker_steamid": sid, "victim_steamid": foe, "attacker_side": CT, "weapon": "awp", "tick": 5000,
+        {"attacker_steamid": sid, "victim_steamid": foe, "attacker_side": CT, "weapon": "awp", "tick": 3800,
          "headshot": False, "noscope": False, "penetrated": False},
-        {"attacker_steamid": sid, "victim_steamid": 223, "attacker_side": CT, "weapon": "awp", "tick": 6000,
+        {"attacker_steamid": sid, "victim_steamid": 223, "attacker_side": CT, "weapon": "awp", "tick": 3900,
          "headshot": False, "noscope": False, "penetrated": False},
         # R3：单杀（低于 min_kills=2）
         {"attacker_steamid": sid, "victim_steamid": foe, "attacker_side": CT, "weapon": "m4a1", "tick": 5000,
