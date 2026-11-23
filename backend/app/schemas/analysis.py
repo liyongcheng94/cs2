@@ -68,10 +68,35 @@ class ThrowEvent(BaseModel):
     blind_seconds: float | None = None
 
 
+class UtilityPlayer(BaseModel):
+    """单玩家道具统计（全场 10 人，道具分析 Tab 数据源）。"""
+
+    player_id: str
+    nick_name: str = ""
+    side: str | None = None
+    smoke: int = 0
+    flash: int = 0
+    molotov: int = 0
+    he: int = 0
+    flash_enemies: int = 0  # 致盲敌方人次（player_blind）
+    flash_teammates: int = 0
+    util_dmg: int = 0  # 燃烧瓶+手雷造成的伤害
+    spend: int = 0  # 道具购买花费（官方价目表估算）
+
+
+class ServerRatings(BaseModel):
+    """六维能力评分（0-100，本场内相对归一化；近似口径）。"""
+
+    players: dict[str, dict[str, float]] = Field(default_factory=dict)  # playerId -> 六维
+    averages: dict[str, float] = Field(default_factory=dict)  # 本场均值
+
+
 class UtilityDim(BaseModel):
     throws: list[ThrowEvent] = Field(default_factory=list)
     blind_median_s: float | None = None  # 致盲时长中位数（抗离群值）
     waste_rate: float | None = None  # 未致盲/未造成伤害的投掷物占比
+    players: list[UtilityPlayer] = Field(default_factory=list)  # 全场玩家道具统计
+    server_ratings: ServerRatings | None = None  # 六维能力评分（服务器评价 Tab）
 
 
 class AnalysisMeta(BaseModel):

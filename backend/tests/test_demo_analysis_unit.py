@@ -5,9 +5,13 @@ from app.services.demo_analysis import (
     _round_of_tick,
     analyze_deaths,
     analyze_duels,
+    analyze_utility_players,
+    compute_server_ratings,
     distance_bucket,
     weapon_class,
 )
+
+DEMO_PATH = None  # 运行时惰性解析（部分用例需要真实 demo）
 
 
 def _kills_frame(rows):
@@ -119,3 +123,50 @@ def test_analyze_deaths_disadvantaged_approximation():
     assert events[0].disadvantaged_position is True
     assert events[0].distance_m is not None and events[0].distance_m > 15
     assert dim.disadvantaged_rate == 1.0
+
+
+def test_utility_players_full_pipeline():
+    """
+    Given 真实 demo（客户端缓存解压产物）
+    When  analyze_utility_players
+    Then  10 人各有烟/闪/火/雷计数、花费估算、致盲敌我分布合理
+    """
+    import pytest
+
+    from pathlib import Path
+
+    demo = Path(__file__).resolve().parents[2] / "data" / "demos" / "9215177922805569036_0.dem"
+    if not demo.exists():
+        pytest.skip("本地无真实 demo")
+
+    from awpy import Demo
+
+    d = Demo(path=str(demo))
+    players = analyze_utility_players(d, d.grenades, d.damages, d.kills)
+    assert len(players) == 10
+    assert sum(p.spend for p in players) > 10000
+    me = next((p for p in players if p.player_id == "76561198339750836"), None)
+    assert me is not None
+    assert me.smoke + me.flash + me.molotov + me.he > 0
+    assert me.flash_enemies + me.flash_teammates > 0
+
+
+def test_compute_server_ratings_shape():
+    """
+    Given v1 全场 5 人合成数据
+    When  compute_server_ratings
+    Then  每人六维 0-100、场均值 6 维
+    """
+    players = [
+        {"playerId": str(1000 + i), "kill": 10 + i, "death": 15 - i, "dmgHealth": 800 + i * 50,
+         "headShotRatio": 0.2 + i * 0.03, "fireCount": 50, "hitCount": 10 + i,
+         "tradeFragCount": i, "entryKill": i % 3, "entryDeath": (3 - i) % 3,
+         "vs1": 1, "vs2": 0, "vs3": 0, "vs4": 0, "vs5": 0}
+        for i in range(5)
+    ]
+    ratings = compute_server_ratings(players, [])
+    assert len(ratings.players) == 5
+    for pid, dims in ratings.players.items():
+        for dim, v in dims.items():
+            assert 0 <= v <= 100, (pid, dim, v)
+    assert len(ratings.averages) == 6

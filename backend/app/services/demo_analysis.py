@@ -30,6 +30,8 @@ from ..schemas.analysis import (
     SCHEMA_VERSION,
     ThrowEvent,
     UtilityDim,
+    UtilityPlayer,
+    ServerRatings,
 )
 
 UNIT_TO_M = 0.01905
@@ -59,6 +61,17 @@ def distance_bucket(dist_m: float) -> str:
     if dist_m < 15:
         return "5-15m"
     return "15m+"
+
+
+def _sid(v) -> str:
+    """steamid 归一化：字符串直接返回（保精度），浮点尽力转换（17 位会丢精度，勿用于 grenades 帧）。"""
+    s = str(v)
+    if re.fullmatch(r"\d{15,18}", s):
+        return s
+    try:
+        return str(int(float(v)))
+    except (TypeError, ValueError, OverflowError):
+        return s
 
 
 def _xyz_dist(ax, ay, az, vx, vy, vz) -> float:
@@ -177,6 +190,125 @@ def analyze_economy(demo, kills, rounds, steam_id: int, user_side: str | None) -
     )
 
 
+GRENADE_PRICES = {"smoke": 300, "flash": 200, "molotov": 400, "incendiary": 600, "he": 300, "decoy": 50}
+GRENADE_TYPES = {"smoke", "flash", "molotov", "incendiary", "he", "decoy"}
+
+
+def analyze_utility_players(demo, grenades, hurts, kills) -> list[UtilityPlayer]:
+    """全场 10 人的道具统计（道具分析 Tab）：投掷分类/致盲敌方与队友/道具伤害/花费估算。
+
+    数据源：grenades 逐 tick 轨迹帧（按 entity_id 去重=一次投掷）、demoparser2 player_blind
+    （attacker_steamid→user_steamid）、damages 帧燃烧瓶/手雷伤害。
+    """
+    from demoparser2 import DemoParser
+
+    # 投掷去重（每 entity_id 一次）；grenades 帧 steamid 是浮点（17 位丢精度）→ 用名称映射回精确 steamid
+    name_to_sid = {}
+    for r in kills.to_dicts():
+        name_to_sid[str(r.get("attacker_name") or "").strip()] = _sid(r.get("attacker_steamid"))
+        name_to_sid[str(r.get("victim_name") or "").strip()] = _sid(r.get("victim_steamid"))
+    throws = grenades.unique(subset=["entity_id"]).to_dicts()
+    per: dict[str, dict] = {}
+
+    def _acc(pid: str, name: str, side: str | None) -> dict:
+        if pid not in per:
+            per[pid] = {"player_id": pid, "nick_name": name, "side": side,
+                        "smoke": 0, "flash": 0, "molotov": 0, "he": 0,
+                        "flash_enemies": 0, "flash_teammates": 0, "util_dmg": 0, "spend": 0}
+        return per[pid]
+
+    for t in throws:
+        pname = str(t.get("thrower_name") or "").strip()
+        pid = name_to_sid.get(pname) or _sid(t.get("thrower_steamid"))
+        gtype = (t.get("type") or "").lower()
+        if gtype not in GRENADE_TYPES:
+            continue
+        acc = _acc(pid, pname, t.get("thrower_side"))
+        if gtype in ("molotov", "incendiary"):
+            acc["molotov"] += 1
+        elif gtype == "he":
+            acc["he"] += 1
+        elif gtype == "smoke":
+            acc["smoke"] += 1
+        elif gtype == "flash":
+            acc["flash"] += 1
+        acc["spend"] += GRENADE_PRICES.get(gtype, 0)
+
+    # 致盲事件（含敌我区分）
+    sides = {}
+    for r in kills.to_dicts():
+        sides[_sid(r.get("attacker_steamid"))] = r.get("attacker_side")
+        sides[_sid(r.get("victim_steamid"))] = r.get("victim_side")
+    try:
+        blind = DemoParser(str(demo.path)).parse_event("player_blind", other=["attacker_steamid", "user_steamid"])
+        for r in blind.to_dict("records"):
+            atk = str(r.get("attacker_steamid"))
+            if atk not in per or atk == "0":
+                continue
+            dur = float(r.get("blind_duration") or 0)
+            if dur <= 0.1:
+                continue
+            victim_side = sides.get(str(r.get("user_steamid")))
+            atk_side = sides.get(atk)
+            if victim_side and atk_side and victim_side != atk_side:
+                per[atk]["flash_enemies"] += 1
+            else:
+                per[atk]["flash_teammates"] += 1
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"[demo解析] 致盲事件提取失败：{exc}")
+
+    # 道具伤害（player_hurt 事件：inferno=燃烧瓶、hegrenade=手雷、molotov=燃烧弹）
+    UTIL_WEAPONS = {"inferno", "hegrenade", "molotov"}
+    for r in hurts.to_dicts():
+        atk = str(r.get("attacker_steamid"))
+        wpn = (r.get("weapon") or "").lower()
+        wpn = re.sub(r"_txz\d+$", "", wpn)
+        if atk in per and wpn in UTIL_WEAPONS:
+            per[atk]["util_dmg"] += int(r.get("dmg_health") or 0)
+
+    return [UtilityPlayer(**per[k]) for k in sorted(per)]
+
+
+def compute_server_ratings(players_v1: list[dict], utility_players: list[UtilityPlayer]) -> ServerRatings:
+    """六维能力评分（服务器评价 Tab）：基于 v1 全场 10 人数据 + 道具统计，本场内相对归一化 0-100。
+
+    近似口径（与完美平台官方算法不同）：瞄准=爆头率×命中率；补枪=补枪数；突破=首杀-首死；
+    道具=道具伤害+致盲敌方+投掷数；残局=vs1-v5 加权计数；火力=击杀×2+伤害/100。
+    """
+    util_by_pid = {u.player_id: u for u in utility_players}
+
+    def _norm(vals: dict[str, float], pid: str) -> float | None:
+        vs = list(vals.values())
+        if len(vs) < 2 or max(vs) == min(vs):
+            return 50.0
+        lo, hi = min(vs), max(vs)
+        return round(50 + (vals[pid] - lo) / (hi - lo) * 50, 1) if pid in vals else None
+
+    raw = {dim: {} for dim in ["aim", "trade", "entry", "util", "clutch", "fire"]}
+    for p in players_v1:
+        pid = str(p.get("playerId"))
+        u = util_by_pid.get(pid)
+        hit_total = max(1, int(p.get("fireCount") or 0))
+        hit_rate = int(p.get("hitCount") or 0) / hit_total
+        raw["aim"][pid] = hit_rate + float(p.get("headShotRatio") or 0)
+        raw["trade"][pid] = int(p.get("tradeFragCount") or 0)
+        raw["entry"][pid] = int(p.get("entryKill") or 0) * 2 - int(p.get("entryDeath") or 0)
+        raw["util"][pid] = (u.util_dmg if u else 0) + (u.flash_enemies * 100 if u else 0) + (u.spend / 10 if u else 0)
+        clutch = sum(int(p.get(f"vs{i}") or 0) * i for i in range(1, 6))
+        raw["clutch"][pid] = clutch
+        raw["fire"][pid] = int(p.get("kill") or 0) * 2 + int(p.get("dmgHealth") or 0) / 100
+
+    zh = {"aim": "瞄准能力", "trade": "补枪能力", "entry": "突破能力", "util": "道具能力", "clutch": "残局能力", "fire": "火力值"}
+    players_out: dict[str, dict[str, float]] = {}
+    averages: dict[str, float] = {}
+    for dim, vals in raw.items():
+        nums = [v for v in vals.values()]
+        averages[zh[dim]] = round(sum(nums) / len(nums) / (max(nums) - min(nums) + 1e-9) * 100, 1) if nums else 50.0
+        for pid in vals:
+            players_out.setdefault(pid, {})[zh[dim]] = _norm(vals, pid) or 50.0
+    return ServerRatings(players=players_out, averages=averages)
+
+
 def analyze_utility(demo, grenades, steam_id: int, user_entity_ids: set[int]) -> UtilityDim:
     """道具：投掷清单（按 entity_id 去重——grenades 帧是逐 tick 轨迹，非事件）+ 闪光浪费率 + 致盲中位数。"""
     my = (
@@ -234,7 +366,9 @@ def run_analysis(dem_path, match_id: str, steam_id: str) -> tuple[FourDimAnalysi
         deaths_dim, _events = analyze_deaths(kills, rounds, sid)
         duels_dim = analyze_duels(kills, sid)
         economy_dim = analyze_economy(demo, kills, rounds, sid, user_side)
+        utility_players = analyze_utility_players(demo, grenades, demo.damages, kills)
         utility_dim = analyze_utility(demo, grenades, sid, set())
+        utility_dim.players = utility_players
 
         analysis = FourDimAnalysis(
             match_id=match_id,
