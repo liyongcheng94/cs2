@@ -120,6 +120,7 @@ interface GrenadeRow {
   content_md: string;
   zone: string | null;
   favorited: boolean;
+  health?: string | null; // v3 S4：alive/aging/stale（stale=过期红标、aging=存疑黄标）
 }
 
 interface GrenadeImageRow {
@@ -406,6 +407,12 @@ function GrenadeLibrary() {
                     <GrenadeBadge type={g.grenade_type} />
                     <Tag color="purple">{inferZone(g)}</Tag>
                     {g.timing ? <Tag>{g.timing}</Tag> : null}
+                    {g.health === "stale" ? (
+                      <Tag color="red" data-testid={`health-stale-${g.id}`}>过期</Tag>
+                    ) : null}
+                    {g.health === "aging" ? (
+                      <Tag color="gold" data-testid={`health-aging-${g.id}`}>存疑</Tag>
+                    ) : null}
                   </Space>
                   {g.stance ? (
                     <Text type="secondary" style={{ fontSize: 12 }}>

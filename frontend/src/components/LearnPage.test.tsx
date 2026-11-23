@@ -308,3 +308,54 @@ describe("LearnPage v2 分区 + 收藏（grill-me 八问共识）", () => {
     expect((imgs as HTMLImageElement).src).toContain("/api/bili/uploads/2/a.png");
   });
 });
+
+describe("LearnPage 学道具 v3：时效健康角标（S4）", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    apiGetMock.mockImplementation((path: string) => {
+      if (path === "/bili/videos") return Promise.resolve(VIDEOS);
+      if (path === "/bili/grenades") return Promise.resolve(GRENADES);
+      return Promise.resolve([]);
+    });
+  });
+
+  // S4.4 Given 卡 health=stale When 渲染 Then 红色「过期」角标
+  test("stale 卡显示红色过期角标", async () => {
+    apiGetMock.mockImplementation((path: string) => {
+      if (path === "/bili/videos") return Promise.resolve(VIDEOS);
+      if (path === "/bili/grenades")
+        return Promise.resolve([
+          { ...GRENADES[0], health: "stale" },
+          { ...GRENADES[1], health: "alive" },
+        ]);
+      return Promise.resolve([]);
+    });
+    renderPage();
+    await screen.findByText("Mirage · VIP（T方10号位）");
+    expect(await screen.findByTestId("health-stale-1")).toBeTruthy();
+    expect(screen.queryByTestId("health-aging-1")).toBeNull();
+  });
+
+  // S4.5 Given 卡 health=aging When 渲染 Then 黄色「存疑」角标
+  test("aging 卡显示黄色存疑角标", async () => {
+    apiGetMock.mockImplementation((path: string) => {
+      if (path === "/bili/videos") return Promise.resolve(VIDEOS);
+      if (path === "/bili/grenades")
+        return Promise.resolve([{ ...GRENADES[0], health: "aging" }]);
+      return Promise.resolve([]);
+    });
+    renderPage();
+    await screen.findByText("Mirage · VIP（T方10号位）");
+    expect(await screen.findByTestId("health-aging-1")).toBeTruthy();
+  });
+
+  // S4.6 Given 卡 health=alive When 渲染 Then 无角标
+  test("alive 卡无健康角标", async () => {
+    renderPage();
+    await screen.findByText("Mirage · VIP（T方10号位）");
+    await waitFor(() => {
+      expect(screen.queryByTestId("health-stale-1")).toBeNull();
+      expect(screen.queryByTestId("health-aging-1")).toBeNull();
+    });
+  });
+});
