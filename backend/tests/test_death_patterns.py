@@ -1,4 +1,5 @@
 """重复死亡模式契约：跨场聚合 deaths（同图同区 ≥3 次）→ 周报段落 + AI 教练上下文注入。"""
+import json as _json
 from datetime import datetime
 
 from app.database import session_factory
@@ -87,6 +88,23 @@ def test_coach_instruction_injects_death_patterns(client, monkeypatch):
     When  POST /api/chat
     Then  instruction 注入惯性死亡点提示（跨场模式，AI 能引用）
     """
+    import httpx as _httpx
+
+    import app.services.chat_coach as cc
+    from app.services.ai_client import AiClient
+
+    seen: list[dict] = []
+
+    def handler(request: _httpx.Request) -> _httpx.Response:
+        if request.url.path == "/api/auth/login":
+            return _httpx.Response(200, json={"ok": True}, headers={"set-cookie": "mv_session=t; Path=/"})
+        seen.append(_json.loads(request.content))
+        return _httpx.Response(200, json={"text": "根据你的死亡模式…"})
+
+    monkeypatch.setattr(cc, "build_ai_client", lambda session: AiClient(
+        provider="mindvault", mv_base_url="http://stub", mv_password="pw",
+        transport=_httpx.MockTransport(handler)))
     _seed(client)
     resp = client.post("/api/chat", json={"content": "我总在哪里死？"})
     assert resp.status_code == 200
+    assert "惯性死亡点" in seen[0]["instruction"] and "炙热沙城Ⅱ" in seen[0]["instruction"]
