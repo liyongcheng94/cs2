@@ -1,9 +1,9 @@
-// AI 教练对话：多轮 + 历史持久化（后端存 SQLite），上下文自动注入画像/最近复盘
-// v2（2026-11-23）：图片上传（OCR 间接路线——AI 以文字看图）+ 气泡内图片展示 + 会话历史查看
+// AI 教练对话：多轮 + 历史持久化（后端存 SQLite），上下文自动注入画像/赛季数据/道具卡索引
+// v3（2026-11-23）：训练处方卡（```training 块解析成卡 + 一键入任务中心打卡）
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Card, Image, Input, List, message, Popconfirm, Space, Upload, Typography } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
+import { Button, Card, Image, Input, List, message, Popconfirm, Space, Tag, Typography, Upload } from "antd";
+import { CheckOutlined, PlusOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import { apiDelete, apiGet, apiPost, apiUpload } from "../api/client";
 
 const { Text } = Typography;
@@ -24,6 +24,15 @@ interface ChatImageItem {
   url: string;
   filename: string;
   ocr_text: string;
+}
+export interface TrainingCardItem {
+  id: number;
+  session_id: number;
+  title: string;
+  detail: string;
+  duration_min: number | null;
+  check: string;
+  task_id: number | null;
 }
 
 export function CoachChat() {
@@ -101,6 +110,20 @@ export function CoachChat() {
     },
   });
 
+  // 训练处方卡：列表 + 一键入任务中心
+  const cards = useQuery({
+    queryKey: ["training-cards"],
+    queryFn: () => apiGet<TrainingCardItem[]>("/chat/training-cards"),
+  });
+  const toTask = useMutation({
+    mutationFn: (cardId: number) => apiPost<{ task_id: number }>(`/chat/training-cards/${cardId}/to-task`),
+    onSuccess: () => {
+      message.success("已加入任务中心，去任务页打卡");
+      qc.invalidateQueries({ queryKey: ["training-cards"] });
+    },
+    onError: (e: Error) => message.error(`加入失败：${e.message}`),
+  });
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.data?.length, send.isPending, pendingImages.length]);
@@ -161,6 +184,52 @@ export function CoachChat() {
             </Space>
           ))}
         </Space>
+      </Card>
+
+      <Card size="small" title="训练处方卡" style={{ maxWidth: 960 }} data-testid="training-cards">
+        {(cards.data ?? []).length === 0 ? (
+          <Text type="secondary">教练给出的训练安排会自动生成卡片，可一键加入任务中心打卡</Text>
+        ) : (
+          <List
+            size="small"
+            dataSource={cards.data ?? []}
+            renderItem={(c) => (
+              <List.Item
+                actions={[
+                  c.task_id ? (
+                    <Tag key="done" color="success" icon={<CheckOutlined />}>已入任务</Tag>
+                  ) : (
+                    <Button
+                      key="add"
+                      size="small"
+                      type="primary"
+                      ghost
+                      icon={<ThunderboltOutlined />}
+                      onClick={() => toTask.mutate(c.id)}
+                    >
+                      加入任务
+                    </Button>
+                  ),
+                ]}
+              >
+                <List.Item.Meta
+                  title={
+                    <Space size={6}>
+                      <span>{c.title}</span>
+                      {c.duration_min ? <Tag>{c.duration_min} 分钟</Tag> : null}
+                    </Space>
+                  }
+                  description={
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {c.detail}
+                      {c.check ? ` ｜验收：${c.check}` : ""}
+                    </Text>
+                  }
+                />
+              </List.Item>
+            )}
+          />
+        )}
       </Card>
 
       <Card size="small" style={{ maxWidth: 960, minHeight: 320 }}>
