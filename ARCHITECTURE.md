@@ -25,7 +25,7 @@
 - 凭证 Fernet 加密存 settings；secret.key 环境变量 + .gitignore。
 - JSON schema 四维基线指标全字段预留（距离分桶胜率/劣势枪位死亡/有效购买比例/首杀转化率/致盲时长中位数/道具浪费率/先手vs后手胜率/镜像对枪胜率）。
 - MindVault 加 `POST /api/capture/videos`（{source_hash}_{preset_hash} 寻址、.tmp→os.rename 原子写、已存在且大小一致直接返回；TDD 流程）。
-- Mock 全链路：`POST /api/test/mock-flow` 假数据跑通 后端→面板→MCP→MindVault。
+- Mock 全链路：`POST /api/test/mock-flow` 假数据跑通 后端→面板→MCP→MindVault（**2026-11-23 移除**：验证使命已完成，端点与 UI 触发按钮/弹窗删除，MindVault 推送链路改由学道具/AI 教练真实功能覆盖）。
 - 前端 React Query 轮询 `GET /api/tasks`（5s）。
 - 闸门：pytest 绿 + tsc 过 + MindVault 新端点绿 + verify.bat 内 mock-flow 走通。
 - **验收证据（2026-11-22）**：CS2HQ 后端 21 用例全绿，覆盖率 94%（门禁基线 89% 写入 AGENTS.md）；前端 tsc PASS + vite 5174 冒烟 200（/api 代理连通）；MindVault 新端点 7 用例绿，全量 1102 用例 93.18%≥92% 门禁不降；Mock 全链路真库验收：CS2HQ(Fernet 加密密码)→MindVault 登录换令牌→MCP create_note 返回 uuid=111491da-a344-4170-9ee8-70dd4ce1d1aa，`GET /api/search?q=MOCK` 命中，「CS2复盘」主题自动创建（验收实例为临时数据目录 `data/mv-acceptance`，未触碰真实知识库）。

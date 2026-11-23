@@ -75,12 +75,3 @@ export interface Profile {
   };
   updated_at: string;
 }
-
-export interface MockFlowResult {
-  ok: boolean;
-  pushed: boolean;
-  mv_uuid?: string;
-  topic?: string;
-  match_id: string;
-  reason?: string;
-}

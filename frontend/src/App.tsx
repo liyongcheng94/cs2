@@ -5,12 +5,10 @@ import {
   Button,
   Card,
   Col,
-  Descriptions,
   Form,
   Input,
   Layout,
   message,
-  Modal,
   Row,
   Space,
   Statistic,
@@ -26,15 +24,13 @@ import { SeasonTrends } from "./components/SeasonTrends";
 import { WanmeiLogin } from "./components/WanmeiLogin";
 import { MatchDetailModal } from "./components/MatchDetailModal";
 import { LearnPage } from "./components/LearnPage";
-import type { MatchDetail, MatchSummary, MockFlowResult, Profile, TaskItem } from "./types";
+import type { MatchDetail, MatchSummary, Profile, TaskItem } from "./types";
 
 const { Header, Content } = Layout;
 const { Title } = Typography;
 
 // ---------- 总览 ----------
 function OverviewPage() {
-  const qc = useQueryClient();
-  const [mockOpen, setMockOpen] = useState(false);
   const profileQuery = useQuery({
     queryKey: ["profile"],
     queryFn: () => apiGet<Profile>("/profile"),
@@ -44,28 +40,12 @@ function OverviewPage() {
     queryFn: () => apiGet<{ season_id: string; data: Record<string, unknown>; updated_at: string }>("/matches/stats/season"),
     retry: false,
   });
-  const mockFlow = useMutation({
-    mutationFn: () => apiPost<MockFlowResult>("/test/mock-flow"),
-    onSuccess: () => {
-      setMockOpen(true);
-      qc.invalidateQueries({ queryKey: ["matches"] });
-    },
-  });
   const p = profileQuery.data;
 
   return (
     <Space direction="vertical" size="middle" style={{ width: "100%" }}>
       <Card
         title="玩家基线画像（来自 DeepSeek 对话还原）"
-        extra={
-          <Button
-            type="primary"
-            loading={mockFlow.isPending}
-            onClick={() => mockFlow.mutate()}
-          >
-            跑一次 Mock 全链路
-          </Button>
-        }
       >
         {p ? (
           <Row gutter={24}>
@@ -95,31 +75,6 @@ function OverviewPage() {
           "加载中…"
         )}
       </Card>
-
-      <Modal
-        title="Mock 全链路结果"
-        open={mockOpen}
-        onCancel={() => setMockOpen(false)}
-        footer={null}
-      >
-        {mockFlow.data ? (
-          <Descriptions column={1} size="small">
-            <Descriptions.Item label="假对局">
-              {mockFlow.data.match_id}
-            </Descriptions.Item>
-            <Descriptions.Item label="推送 MindVault">
-              {mockFlow.data.pushed ? (
-                <Tag color="green">成功 · {mockFlow.data.mv_uuid}</Tag>
-              ) : (
-                <Tag color="red">失败 · {mockFlow.data.reason}</Tag>
-              )}
-            </Descriptions.Item>
-            <Descriptions.Item label="目标主题">
-              {mockFlow.data.topic}
-            </Descriptions.Item>
-          </Descriptions>
-        ) : null}
-      </Modal>
 
       {season.data ? (
         <SeasonTrends data={season.data.data as Record<string, any>} />

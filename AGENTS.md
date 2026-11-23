@@ -20,11 +20,11 @@
 cd backend && .venv/Scripts/python.exe -m pytest --cov=app --cov-fail-under=<基线>
 # 前端类型检查 / 构建
 cd frontend && npx tsc --noEmit && npm run build
-# 一键验收（含 Mock 全链路检查）
+# 一键验收
 python verify.bat
 ```
 
-**Mock 全链路（每日收工前必跑）**：MindVault 启动后（dev: 8001）`curl -X POST http://127.0.0.1:8101/api/test/mock-flow` 应返回 `pushed: true` 且 MindVault `curl "http://127.0.0.1:8001/api/search?q=CS2HQ"` 能命中。
+（Mock 全链路检查已于 2026-11-23 随 `/api/test/mock-flow` 删除而移除；MindVault 推送链路改由学道具/AI 教练真实功能覆盖。）
 
 ## 1. 场景先行（BDD）
 
