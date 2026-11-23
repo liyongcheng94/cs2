@@ -156,13 +156,17 @@ async def _ai_summarize(ai: AiClient, title: str, subtitle_text: str) -> tuple[s
 
     import re
 
-    m = re.search(r"\{.*\}", raw, re.S)
-    data = _json.loads(m.group(0) if m else raw)
-    cards = [
-        c for c in data.get("cards", [])
-        if c.get("map") and c.get("grenade_type")
-    ]
-    return data.get("summary_md") or "", cards
+    try:
+        m = re.search(r"\{.*\}", raw, re.S)
+        data = _json.loads(m.group(0) if m else raw)
+        cards = [
+            c for c in data.get("cards", [])
+            if c.get("map") and c.get("grenade_type")
+        ]
+        return data.get("summary_md") or "", cards
+    except Exception as exc:  # noqa: BLE001 — AI 未按 JSON 输出：降级为原文标注，绝不崩任务
+        logger.warning(f"[B站学习] AI 输出解析失败（降级存原文）：{exc}")
+        return f"# {title}\n\n> ⚠️ AI 输出解析失败，先入库字幕原文。\n\n```\n{subtitle_text[:6000]}\n```", []
 
 
 async def _push_summary(title: str, content_md: str, source_hash: str) -> dict:
