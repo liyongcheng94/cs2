@@ -106,7 +106,9 @@ class TestContextUpgrade:
         from app.models import PlayerProfile, SeasonStats
 
         with session_factory() as s:
-            s.add(PlayerProfile(key="baseline", data={"edpi": 1000, "main_map": "Dust2", "hs_rate": 0.319}))
+            # baseline 种子由 lifespan 创建（hs_rate=0.319 旧截图值），这里只补赛季快照
+            prof = s.get(PlayerProfile, "baseline")
+            assert prof is not None and prof.data.get("hs_rate") == 0.319
             s.add(SeasonStats(season_id="recent", payload={"headShotRatio": 0.35, "cnt": 152}))
             s.commit()
 
