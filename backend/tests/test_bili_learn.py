@@ -57,9 +57,11 @@ def _install_stubs(monkeypatch, ai_reply: str | None, subtitle: str | None, mv: 
     monkeypatch.setattr(bl, "_credential_sess", lambda s: "SESS")
 
     async def fake_fetch(bvid, sess):
-        return subtitle
+        if subtitle is None:
+            return None
+        return [{"from": 12.5, "text": subtitle}]
 
-    monkeypatch.setattr(bl, "fetch_subtitle", fake_fetch)
+    monkeypatch.setattr(bl, "fetch_subtitle_timed", fake_fetch)
     monkeypatch.setattr(bl, "time", type("T", (), {"sleep": staticmethod(lambda s: None), "time": staticmethod(lambda: 0.0)}))
     monkeypatch.setattr(bl, "_new_ai", (lambda: StubAI(ai_reply)) if ai_reply is not None else (lambda: None))
     monkeypatch.setattr(bl, "_new_mv", lambda: mv)

@@ -16,7 +16,15 @@ from ..database import session_factory
 from ..models import BiliVideo, GrenadeCard, Task, VideoSummary, utcnow
 from . import settings_service
 from .ai_client import AiClient
-from .bili import BiliRiskError, fetch_subtitle, fetch_video_meta, resolve_bvid, search_user_videos, search_videos
+from .bili import (
+    BiliRiskError,
+    fetch_subtitle_timed,
+    fetch_video_meta,
+    format_timed_subtitle,
+    resolve_bvid,
+    search_user_videos,
+    search_videos,
+)
 from .report_push import _new_mv, REPORT_TOPIC
 
 SUMMARY_TOPIC = "CS2视频总结"
@@ -118,21 +126,22 @@ async def bili_learn_handler(task: Task, session_factory_fn: Callable[[], Sessio
     results = []
     for t in targets:
         bv = t["bvid"]
-        text = await fetch_subtitle(bv, sess)
+        text = await fetch_subtitle_timed(bv, sess)
         time.sleep(1)  # 限速 1s/视频
         if text is None:
             with session_factory_fn() as s:
                 _upsert_bili_video(s, bv, t.get("title", ""), t.get("author", ""), "no_subtitle", {"keyword": keyword})
             results.append({"bvid": bv, "status": "no_subtitle"})
             continue
+        subtitle_text = format_timed_subtitle(text)
 
         # 总结+道具卡（AI 缺失 → 降级：字幕原文入库）
         title = t.get("title") or bv
         if summary_client is not None:
-            summary_md, cards = await _ai_summarize(summary_client, title, text)
+            summary_md, cards = await _ai_summarize(summary_client, title, subtitle_text)
             summary_model = getattr(summary_client, "model", None)
         else:
-            summary_md = f"# {title}\n\n> ⚠️ 未配置 AI：先入库字幕原文，AI Key 配置后可重新生成总结。\n\n```\n{text[:6000]}\n```"
+            summary_md = f"# {title}\n\n> ⚠️ 未配置 AI：先入库字幕原文，AI Key 配置后可重新生成总结。\n\n```\n{subtitle_text[:6000]}\n```"
             cards = []
             summary_model = None
 
@@ -140,7 +149,7 @@ async def bili_learn_handler(task: Task, session_factory_fn: Callable[[], Sessio
         meta = await fetch_video_meta(bv, sess)
 
         with session_factory_fn() as s:
-            _upsert_bili_video(s, bv, title, t.get("author", ""), "subtitle", {"keyword": keyword, "chars": len(text), **(meta or {})})
+            _upsert_bili_video(s, bv, title, t.get("author", ""), "subtitle", {"keyword": keyword, "chars": len(subtitle_text), **(meta or {})})
             _upsert_video_summary(s, bv, summary_md, summary_model)
             row = s.exec(select(BiliVideo).where(BiliVideo.bvid == bv)).first()
             existing_uuid = row.mv_uuid if row is not None else None

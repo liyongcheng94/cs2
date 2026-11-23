@@ -44,10 +44,10 @@ def test_bili_learn_up_mid_path(client, monkeypatch):
         return [{"bvid": "BV1UP1", "title": "UP投稿", "author": "UP", "pubdate": 1}]
 
     async def fake_fetch(bvid, sess):
-        return "字幕内容"
+        return [{"from": 12.5, "text": "字幕内容"}]
 
     monkeypatch.setattr(bl, "search_user_videos", fake_up)
-    monkeypatch.setattr(bl, "fetch_subtitle", fake_fetch)
+    monkeypatch.setattr(bl, "fetch_subtitle_timed", fake_fetch)
     monkeypatch.setattr(bl, "_credential_sess", lambda s: "SESS")
     monkeypatch.setattr(bl, "_new_ai", lambda: None)
 

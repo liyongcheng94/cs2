@@ -35,7 +35,7 @@ class TestVideoSummaryTable:
         import app.services.bili_learn as bl2
 
         async def fake_fetch(bvid, sess):
-            return "字幕内容：Mirage A点烟雾弹教学"
+            return [{"from": 12.5, "text": "字幕内容：Mirage A点烟雾弹教学"}]
 
         class FakeAI:
             async def chat(self, system, user):
@@ -47,7 +47,7 @@ class TestVideoSummaryTable:
                 })
 
         monkeypatch.setattr(bl2, "_credential_sess", lambda s: "SESS")
-        monkeypatch.setattr(bl2, "fetch_subtitle", fake_fetch)
+        monkeypatch.setattr(bl2, "fetch_subtitle_timed", fake_fetch)
         monkeypatch.setattr(bl2, "_new_ai", lambda: FakeAI())
         monkeypatch.setattr(bl2, "_new_mv", lambda: _StubMV())
 
@@ -75,7 +75,7 @@ class TestVideoSummaryTable:
                 return json.dumps({"summary_md": f"## 版本{self.tag}", "cards": []})
 
         monkeypatch.setattr(bl2, "_credential_sess", lambda s: "SESS")
-        monkeypatch.setattr(bl2, "fetch_subtitle", lambda bv, sess: asyncio.sleep(0, result="字幕"))
+        monkeypatch.setattr(bl2, "fetch_subtitle_timed", lambda bv, sess: asyncio.sleep(0, result=[{"from": 12.5, "text": "字幕"}]))
         monkeypatch.setattr(bl2, "_new_mv", lambda: _StubMV())
 
         monkeypatch.setattr(bl2, "_new_ai", lambda: FakeAI("v1"))

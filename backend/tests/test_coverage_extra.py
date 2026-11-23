@@ -89,10 +89,10 @@ async def test_bili_learn_handler_degraded_flow(client, monkeypatch, tmp_path):
         return [{"bvid": "BV1L1", "title": "CS2 道具教学视频", "author": "UP", "pubdate": 1}]
 
     async def fake_fetch(bvid, sess):
-        return "字幕文本"
+        return [{"from": 12.5, "text": "字幕文本"}]
 
     monkeypatch.setattr(bl, "search_videos", fake_search)
-    monkeypatch.setattr(bl, "fetch_subtitle", fake_fetch)
+    monkeypatch.setattr(bl, "fetch_subtitle_timed", fake_fetch)
     monkeypatch.setattr(bl, "_credential_sess", lambda s: "SESS")
     monkeypatch.setattr(bl, "_new_ai", lambda: None)
 

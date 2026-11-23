@@ -72,7 +72,7 @@ class TestKeywordFilteringInHandler:
 
         monkeypatch.setattr(bl, "_credential_sess", lambda s: "SESS")
         monkeypatch.setattr(bl, "search_videos", fake_search)
-        monkeypatch.setattr(bl, "fetch_subtitle", lambda bv, sess: asyncio.sleep(0, result=None))
+        monkeypatch.setattr(bl, "fetch_subtitle_timed", lambda bv, sess: asyncio.sleep(0, result=None))
         monkeypatch.setattr(
             bl, "time", type("T", (), {"sleep": staticmethod(lambda s: None), "time": staticmethod(lambda: 0.0)})
         )

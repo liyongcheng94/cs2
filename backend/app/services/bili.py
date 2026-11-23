@@ -181,6 +181,53 @@ async def fetch_subtitle(bvid: str, sessdata: str) -> str | None:
     return text or None
 
 
+def _video_factory(bvid: str, cred) -> Any:
+    """可注入的视频对象工厂（测试 monkeypatch 用）。"""
+    from bilibili_api import video as bili_video_mod
+
+    return bili_video_mod.Video(bvid=bvid, credential=cred)
+
+
+def format_timed_subtitle(timed: list[dict[str, Any]]) -> str:
+    """[{from, text}] → "[12.5s] 文本" 每行前缀秒级时间轴（喂 AI 用）。"""
+    return "\n".join(f"[{row['from']}s] {row['text']}" for row in timed if row.get("text"))
+
+
+async def fetch_subtitle_timed(bvid: str, sessdata: str) -> list[dict[str, float | str]] | None:
+    """取字幕带秒级时间轴（[{from, text}]）；无字幕返回 None。
+
+    与 fetch_subtitle 的差异：保留每行 from 秒（B站字幕 JSON body 原生字段），
+    让 AI 能把道具卡 video_ts 绑定到真实字幕秒数，而非估算。
+    """
+    from bilibili_api import Credential
+
+    cred = Credential(sessdata=sessdata)
+    v = _video_factory(bvid, cred)
+    info = await v.get_info()
+    cid = info.get("cid")
+    sub = await v.get_subtitle(cid=cid)
+    subs = sub.get("subtitles") or []
+    if not subs:
+        return None
+    pick = next((s for s in subs if s.get("lan") == "zh-CN"), None) or next(
+        (s for s in subs if s.get("lan") == "ai-zh"), subs[0]
+    )
+    sub_url: str = pick.get("subtitle_url") or ""
+    if sub_url.startswith("//"):
+        sub_url = "https:" + sub_url
+    if not sub_url:
+        return None
+    resp = httpx.get(sub_url, headers=HEADERS, timeout=15)
+    body = resp.json()
+    timed = [
+        {"from": float(item.get("from") or 0), "text": item.get("content", "")}
+        for item in body.get("body") or []
+        if item.get("content")
+    ]
+    logger.info(f"[B站字幕] bvid={bvid} lan={pick.get('lan')} timed 行数={len(timed)}")
+    return timed or None
+
+
 async def search_user_videos(mid: int, sessdata: str, limit: int = 5) -> list[dict[str, Any]]:
     """UP 主最新投稿（bilibili-api user.User.get_videos，按发布时间倒序取 limit 条）。"""
     from bilibili_api import Credential
