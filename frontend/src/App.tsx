@@ -23,6 +23,7 @@ import {
 import { apiGet, apiPost, apiPut } from "./api/client";
 import { DeathScatter } from "./components/DeathScatter";
 import { UtilityScatter } from "./components/UtilityScatter";
+import { LongTermTrends } from "./components/LongTermTrends";
 import { DuelHeatmap } from "./components/DuelHeatmap";
 import { CoachChat } from "./components/CoachChat";
 import { SeasonTrends } from "./components/SeasonTrends";
@@ -636,6 +637,7 @@ export default function App() {
           items={[
             { key: "overview", label: "总览", children: <OverviewPage /> },
             { key: "matches", label: "对局", children: <MatchesPage /> },
+            { key: "trends", label: "趋势", children: <LongTermTrends /> },
             { key: "learn", label: "学道具", children: <LearnPage /> },
             { key: "chat", label: "AI 教练", children: <CoachChat /> },
             { key: "tasks", label: "任务", children: <TasksPage /> },
