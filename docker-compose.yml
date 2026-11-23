@@ -14,6 +14,8 @@ services:
     environment:
       - CS2HQ_DATA_DIR=/app/data
       - CS2HQ_SCHEDULER=1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # backend 容器经宿主访问 MindVault(8300) 等本机服务
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8101/api/health', timeout=3)"]
       interval: 30s
