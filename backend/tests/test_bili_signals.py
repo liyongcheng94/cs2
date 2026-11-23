@@ -27,12 +27,12 @@ def client(tmp_path, monkeypatch):
         yield c
 
 
-def _stub_reply_page(main_msgs, sub_counts=None, count=180):
+def _stub_reply_page(main_msgs, sub_counts=None, count=180, rpid_base=100):
     """构造 x/v2/reply 响应体。main_msgs: [str]; sub_counts: [楼中楼数]"""
     replies = []
     for i, m in enumerate(main_msgs):
         replies.append({
-            "rpid": 100 + i,
+            "rpid": rpid_base + i,
             "content": {"message": m},
             "rcount": (sub_counts or [0] * len(main_msgs))[i],
             "ctime": 1700000000 + i * 3600,
@@ -52,21 +52,23 @@ class TestFetchComments:
     @pytest.mark.anyio
     async def test_fetch_comments_parses_replies(self, monkeypatch):
         """Given B 站评论接口返回 3 条主楼 When fetch_comments Then 返回 (ctime, message, rcount) 列表。"""
-        from app.services import bili
+        from app.services import bili_signals as bs
 
         captured = {}
 
         def handler(request: httpx.Request) -> httpx.Response:
             captured["url"] = str(request.url)
             captured["referer"] = request.headers.get("referer", "")
+            if "web-interface/view" in str(request.url):
+                return httpx.Response(200, json={"code": 0, "data": {"aid": 115137939773663}})
             return httpx.Response(200, json=_stub_reply_page(
                 ["给兄弟们加上进度条了", "跳投现在是怎么投容错率高一些？", "很棒"],
             ))
 
         transport = httpx.MockTransport(handler)
-        monkeypatch.setattr(bili, "_comment_transport", lambda: transport)
+        monkeypatch.setattr(bs, "_comment_transport", lambda: httpx.AsyncClient(transport=transport, headers={"Referer": "https://www.bilibili.com/"}))
 
-        out = await bili.fetch_comments("BV1b1aMziEuE", max_pages=1)
+        out = await bs.fetch_comments("BV1b1aMziEuE", max_pages=1)
         assert len(out) == 3
         ctime, message, rcount = out[0]
         assert message == "给兄弟们加上进度条了"
@@ -79,32 +81,34 @@ class TestFetchComments:
     @pytest.mark.anyio
     async def test_fetch_comments_paginates(self, monkeypatch):
         """Given 两页评论 When max_pages=2 Then 合并两页（去重 rpid）。"""
-        from app.services import bili
+        from app.services import bili_signals as bs
 
         page_no = {"n": 0}
 
         def handler(request: httpx.Request) -> httpx.Response:
+            if "web-interface/view" in str(request.url):
+                return httpx.Response(200, json={"code": 0, "data": {"aid": 115137939773663}})
             page_no["n"] += 1
             n = page_no["n"]
             return httpx.Response(200, json=_stub_reply_page(
-                [f"page{n}-评论"], count=40 if n == 1 else 20,
+                [f"page{n}-评论"], count=40 if n == 1 else 20, rpid_base=100 * n,
             ))
 
-        monkeypatch.setattr(bili, "_comment_transport", lambda: httpx.MockTransport(handler))
-        out = await bili.fetch_comments("BV1x", max_pages=2)
+        monkeypatch.setattr(bs, "_comment_transport", lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+        out = await bs.fetch_comments("BV1x", max_pages=2)
         assert len(out) == 2
         assert {m for _, m, _ in out} == {"page1-评论", "page2-评论"}
 
     @pytest.mark.anyio
     async def test_fetch_comments_degrades_on_error(self, monkeypatch):
         """Given 评论接口风控/网络失败 When fetch_comments Then 返回空列表不抛异常。"""
-        from app.services import bili
+        from app.services import bili_signals as bs
 
         def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(412, text="risk control")
 
-        monkeypatch.setattr(bili, "_comment_transport", lambda: httpx.MockTransport(handler))
-        out = await bili.fetch_comments("BV1x", max_pages=1)
+        monkeypatch.setattr(bs, "_comment_transport", lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+        out = await bs.fetch_comments("BV1x", max_pages=1)
         assert out == []
 
 

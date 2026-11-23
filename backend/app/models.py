@@ -157,6 +157,17 @@ class GrenadeCardImage(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow, sa_type=NAIVE_DT)
 
 
+class GrenadeCardSignal(SQLModel, table=True):
+    """道具卡时效信号（v3 Slice1：评论信号词命中 + 后续 stale 上报/补丁对照共用）。"""
+
+    id: int | None = Field(default=None, primary_key=True)
+    card_id: int = Field(index=True, foreign_key="grenadecard.id")
+    source: str = "comment"  # comment / report / patch
+    text: str = ""  # 信号原文（评论截 200 字 / 上报说明 / 补丁标题）
+    ctime: int | None = None  # 评论时间戳（unix 秒）；report/patch 可空
+    created_at: datetime = Field(default_factory=utcnow, sa_type=NAIVE_DT)
+
+
 class Clip(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     moment_id: str = Field(unique=True, index=True)
