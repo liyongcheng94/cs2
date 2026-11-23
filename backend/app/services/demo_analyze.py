@@ -88,7 +88,7 @@ async def demo_analyze_handler(task: Task, session_factory_fn: Callable[[], Sess
         from .demo_analysis import compute_server_ratings
 
         ratings = compute_server_ratings(v1.get("players") or [], analysis.utility.players)
-        analysis.server_ratings = ratings
+        analysis.utility.server_ratings = ratings
         with session_factory_fn() as session:
             row = session.exec(select(DemoAnalysis).where(DemoAnalysis.match_id == match_id)).first()
             if row is not None:
