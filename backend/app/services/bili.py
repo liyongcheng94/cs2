@@ -128,6 +128,30 @@ async def resolve_bvid(url_or_bvid: str) -> str:
     raise BiliError(f"无法从输入解析 BV 号：{s[:80]}")
 
 
+async def fetch_video_meta(bvid: str, sessdata: str = "") -> dict[str, Any] | None:
+    """取视频元数据（封面/时长/UP mid）；失败返回 None 不阻断学习主链路。
+
+    grill-me 决策 C（2026-11-23）：学习时顺手抓，raw 存 {cover, duration, owner_mid}
+    供前端卡片墙 <img referrerPolicy="no-referrer"> 直显（B站防盗链：无 Referer 200）。
+    """
+    try:
+        from bilibili_api import Credential
+        from bilibili_api import video as bili_video_mod
+
+        cred = Credential(sessdata=sessdata) if sessdata else Credential()
+        v = bili_video_mod.Video(bvid=bvid, credential=cred)
+        info = await v.get_info()
+        owner = info.get("owner") or {}
+        return {
+            "cover": info.get("pic") or "",
+            "duration": info.get("duration") or 0,
+            "owner_mid": owner.get("mid"),
+        }
+    except Exception as exc:  # noqa: BLE001 — 元数据是锦上添花，失败不阻断学习
+        logger.warning(f"[B站元数据] bvid={bvid} 获取失败（忽略）：{type(exc).__name__}: {str(exc)[:100]}")
+        return None
+
+
 async def fetch_subtitle(bvid: str, sessdata: str) -> str | None:
     """取字幕纯文本（zh-CN > ai-zh > 首轨）；无字幕返回 None（调用方标 no_subtitle）。"""
     from bilibili_api import Credential

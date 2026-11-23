@@ -13,10 +13,10 @@ from loguru import logger
 from sqlmodel import Session, select
 
 from ..database import session_factory
-from ..models import BiliVideo, GrenadeCard, Task, utcnow
+from ..models import BiliVideo, GrenadeCard, Task, VideoSummary, utcnow
 from . import settings_service
 from .ai_client import AiClient
-from .bili import BiliRiskError, fetch_subtitle, resolve_bvid, search_user_videos, search_videos
+from .bili import BiliRiskError, fetch_subtitle, fetch_video_meta, resolve_bvid, search_user_videos, search_videos
 from .report_push import _new_mv, REPORT_TOPIC
 
 SUMMARY_TOPIC = "CS2视频总结"
@@ -33,6 +33,20 @@ def _upsert_bili_video(session: Session, bvid: str, title: str, owner: str, subt
         row = BiliVideo(bvid=bvid, title=title, owner=owner, subtitle_status=subtitle_status, raw=raw)
     else:
         row.title, row.owner, row.subtitle_status, row.raw = title, owner, subtitle_status, raw
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row
+
+
+def _upsert_video_summary(session: Session, bvid: str, summary_md: str, model: str | None) -> VideoSummary:
+    """总结本地落库（grill-me 决策 A）：按 bvid 幂等更新，CS2HQ 自站可看不依赖 MV。"""
+    row = session.exec(select(VideoSummary).where(VideoSummary.bvid == bvid)).first()
+    if row is None:
+        row = VideoSummary(bvid=bvid, summary_md=summary_md, model=model)
+    else:
+        row.summary_md, row.model = summary_md, model
+        row.updated_at = utcnow()
     session.add(row)
     session.commit()
     session.refresh(row)
@@ -116,12 +130,18 @@ async def bili_learn_handler(task: Task, session_factory_fn: Callable[[], Sessio
         title = t.get("title") or bv
         if summary_client is not None:
             summary_md, cards = await _ai_summarize(summary_client, title, text)
+            summary_model = getattr(summary_client, "model", None)
         else:
             summary_md = f"# {title}\n\n> ⚠️ 未配置 AI：先入库字幕原文，AI Key 配置后可重新生成总结。\n\n```\n{text[:6000]}\n```"
             cards = []
+            summary_model = None
+
+        # 封面/时长元数据（grill-me 决策 C：学习时顺手抓，零额外请求）
+        meta = await fetch_video_meta(bv, sess)
 
         with session_factory_fn() as s:
-            _upsert_bili_video(s, bv, title, t.get("author", ""), "subtitle", {"keyword": keyword, "chars": len(text)})
+            _upsert_bili_video(s, bv, title, t.get("author", ""), "subtitle", {"keyword": keyword, "chars": len(text), **(meta or {})})
+            _upsert_video_summary(s, bv, summary_md, summary_model)
             row = s.exec(select(BiliVideo).where(BiliVideo.bvid == bv)).first()
             existing_uuid = row.mv_uuid if row is not None else None
             for c in cards:

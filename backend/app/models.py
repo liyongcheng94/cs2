@@ -120,6 +120,17 @@ class BiliVideo(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow, sa_type=NAIVE_DT)
 
 
+class VideoSummary(SQLModel, table=True):
+    """视频 AI 总结本地存档（2026-11-23 grill-me 决策 A：CS2HQ 自站可看，不依赖 MV 在线）。"""
+
+    id: int | None = Field(default=None, primary_key=True)
+    bvid: str = Field(unique=True, index=True)
+    summary_md: str = ""
+    model: str | None = None  # 生成总结的模型名（排障用）
+    created_at: datetime = Field(default_factory=utcnow, sa_type=NAIVE_DT)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=NAIVE_DT)
+
+
 class GrenadeCard(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     map_name: str = Field(index=True)
