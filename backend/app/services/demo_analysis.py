@@ -99,7 +99,11 @@ def _xyz_dist(ax, ay, az, vx, vy, vz) -> float | None:
 
 def _round_of_tick(rounds, tick: int) -> int | None:
     for r in rounds.iter_rows(named=True):
-        if r["start_tick"] <= tick <= r["official_end_tick"]:
+        # official_end_tick 在真实 demo 里可能为 None（awpy 3.3.0 个别回合缺列）→ end_tick 兜底
+        end = r["official_end_tick"] if r["official_end_tick"] is not None else r["end_tick"]
+        if end is None:
+            continue
+        if r["start_tick"] <= tick <= end:
             return int(r["round_num"])
     return None
 

@@ -46,11 +46,18 @@ def detect_highlights(kills, rounds, steam_id: int, user_side: str | None) -> li
     my.sort(key=lambda r: int(r["tick"]))
     rounds_list = rounds.to_dicts()
     win_map = {int(r["round_num"]): r.get("winner_side") for r in rounds_list}
-    round_bounds = {int(r["round_num"]): (int(r["start_tick"]), int(r["official_end_tick"])) for r in rounds_list}
+
+    def _bounds(r: dict) -> tuple[int, int]:
+        """回合起止（official_end_tick 真实数据可为 None → end_tick 兜底；仍缺则跳过该回合）。"""
+        start = int(r["start_tick"])
+        raw_end = r["official_end_tick"] if r["official_end_tick"] is not None else r.get("end_tick")
+        return start, int(raw_end) if raw_end is not None else -1
+
+    round_bounds = {int(r["round_num"]): _bounds(r) for r in rounds_list}
 
     def round_of(tick: int) -> int | None:
         for rn, (s, e) in round_bounds.items():
-            if s <= tick <= e:
+            if e >= s and s <= tick <= e:
                 return rn
         return None
 
