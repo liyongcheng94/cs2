@@ -9,11 +9,13 @@ services:
       - "127.0.0.1:8101:8101"
     volumes:
       - ./data:/app/data          # SQLite + 日志 + 凭证持久化
+      - /mnt/c/Users/will.li/AppData/Roaming/Wmpvp/demo:/mnt/wmpvp-demo:ro  # Windows 完美客户端 demo 缓存（只读）
     env_file:
       - cs2hq.env                 # 密钥文件（.env 名称被安全策略禁写，用别名；不入 git）
     environment:
       - CS2HQ_DATA_DIR=/app/data
       - CS2HQ_SCHEDULER=1
+      - CS2HQ_CLIENT_DEMO_DIR=/mnt/wmpvp-demo  # Windows 客户端 demo 缓存挂载点（见 volumes）
     extra_hosts:
       - "host.docker.internal:host-gateway"  # backend 容器经宿主访问 MindVault(8300) 等本机服务
     healthcheck:

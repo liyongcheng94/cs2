@@ -17,10 +17,27 @@ class DemoNotAvailableError(Exception):
     """客户端与本地缓存都没有该场 demo（提示用户在完美客户端里点开该场 demo 观看）。"""
 
 
+# WSL 下 Windows 客户端缓存常见挂载位置（依次探测，第一个存在的胜出）
+_WSL_DEMO_GLOBS = [
+    Path("/mnt/c/Users/*/AppData/Roaming/Wmpvp/demo"),
+    Path("/mnt/c/Users/*/Documents/Wmpvp/demo"),
+]
+
+
 def client_demo_dir() -> Path:
-    """完美客户端 demo 缓存目录（Windows：%APPDATA%/Wmpvp/demo）。"""
-    appdata = os.environ.get("APPDATA") or str(Path.home() / "AppData" / "Roaming")
-    return Path(appdata) / "Wmpvp" / "demo"
+    """完美客户端 demo 缓存目录，优先级：CS2HQ_CLIENT_DEMO_DIR 显式配置 > Windows APPDATA
+    > WSL /mnt/c 挂载探测 > ~/AppData/Roaming/Wmpvp/demo（原语义回退）。"""
+    explicit = os.environ.get("CS2HQ_CLIENT_DEMO_DIR")
+    if explicit:
+        return Path(explicit)
+    appdata = os.environ.get("APPDATA")
+    if appdata:
+        return Path(appdata) / "Wmpvp" / "demo"
+    for pattern in _WSL_DEMO_GLOBS:
+        hits = sorted(Path("/").glob(str(pattern).lstrip("/")))
+        if hits:
+            return hits[0]
+    return Path.home() / "AppData" / "Roaming" / "Wmpvp" / "demo"
 
 
 def match_id_to_client_name(match_id: str) -> str:
