@@ -12,6 +12,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# vendored 签名 wheel（完美 demo 直下：cs_demo_pwa_signer）
+COPY vendor /tmp/vendor
+RUN pip install --no-cache-dir /tmp/vendor/*.whl && rm -rf /tmp/vendor
+
 COPY app ./app
 
 # 数据目录（DB/日志/凭证），由 compose 卷挂载持久化

@@ -112,6 +112,7 @@ function MatchesPage() {
   });
   const sync = () => runTask.mutate({ type: "wanmei_sync" });
   const analyze = (matchId: string) => runTask.mutate({ type: "demo_analyze", matchId });
+  const fetchDemo = (matchId: string) => runTask.mutate({ type: "demo_fetch", matchId });
   const matches = useQuery({
     queryKey: ["matches"],
     queryFn: () => apiGet<MatchSummary[]>("/matches"),
@@ -154,6 +155,9 @@ function MatchesPage() {
       render: (_: unknown, r: MatchSummary) => (
         <Space>
           <a onClick={() => setDetailId(r.id)}>详情</a>
+          {r.demo_status === "none" || r.demo_status === "failed" ? (
+            <a onClick={() => fetchDemo(r.match_id)}>下载demo</a>
+          ) : null}
           <a onClick={() => analyze(r.match_id)}>分析demo</a>
         </Space>
       ),
