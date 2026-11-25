@@ -48,7 +48,7 @@ def test_weapon_class_mapping():
     assert weapon_class("ak47") == "rifle"
     assert weapon_class("glock") == "pistol"
     assert weapon_class("mac10") == "smg"
-    assert weapon_class("knife_t") == "other"
+    assert weapon_class("knife_t") == "melee"  # 1.2 起刀类独立（不再混入 other）
     assert weapon_class(None) == "other"
     # 完美平台皮肤后缀 _txzNN（实测 ak47_txz02 全进 other 的根因）
     assert weapon_class("ak47_txz02") == "rifle"
