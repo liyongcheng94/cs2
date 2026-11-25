@@ -45,11 +45,16 @@ TICK_RATE = 64  # CS2 标准 64 tick（blind 散点 start_tick 复用为致盲�
 WEAPON_CLASSES = {
     "awp": "sniper", "ssg08": "sniper", "scar20": "sniper",
     "ak47": "rifle", "m4a1": "rifle", "m4a1_silencer": "rifle", "m4a4": "rifle",
-    "galil": "rifle", "famas": "rifle", "sg556": "rifle", "aug": "rifle",
+    "galil": "rifle", "galilar": "rifle", "famas": "rifle", "sg556": "rifle", "aug": "rifle",
     "glock": "pistol", "usp_silencer": "pistol", "deagle": "pistol", "p250": "pistol",
     "tec9": "pistol", "fiveseven": "pistol", "cz75a": "pistol", "dual_berettas": "pistol",
     "mac10": "smg", "mp9": "smg", "mp7": "smg", "ump45": "smg", "p90": "smg", "bizon": "smg",
+    "mp5sd": "smg", "negev": "other",
     "nova": "shotgun", "xm1014": "shotgun", "mag7": "shotgun", "sawedoff": "shotgun",
+    "knife": "melee", "knife_t": "melee", "knife_push": "melee", "bayonet": "melee",
+    "hegrenade": "nade", "inferno": "nade", "molotov": "nade", "flashbang": "nade",
+    "decoy": "nade", "taser": "melee",
+    "planted_c4": "env", "world": "env", "c4": "env",
 }
 AWP_LIKE = {"awp", "ssg08", "scar20"}
 
@@ -65,9 +70,9 @@ PURCHASE_ITEM_TO_GRENADE = {
 
 
 def weapon_class(weapon: str | None) -> str:
-    """武器归类；完美平台 demo 的饰品皮肤带 _txzNN 后缀（如 ak47_txz02），先剥离再匹配。"""
+    """武器归类；完美平台 demo 的饰品皮肤带后缀（_txzNN/_vip）先剥离再匹配。"""
     w = (weapon or "").lower()
-    w = re.sub(r"_txz\d+$", "", w)  # 完美皮肤后缀（实测 ak47_txz02/awp_txz02/nova_txz02…）
+    w = re.sub(r"_(txz\d+|vip)$", "", w)  # 完美皮肤后缀（实测 ak47_txz02/awp_txz02/m4a1_vip/glock_vip…）
     return WEAPON_CLASSES.get(w, "other")
 
 
