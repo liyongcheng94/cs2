@@ -96,7 +96,6 @@ def _stub_analysis_pipeline(monkeypatch):
         return {"created": True, "uuid": "u-1", "reason": None, "match_id": analysis_arg.match_id}
 
     monkeypatch.setattr(da, "run_analysis", fake_run)
-    monkeypatch.setattr(da, "gc_raw_demo", lambda p: None)
     monkeypatch.setattr(da, "push_report", fake_push)
 
 
