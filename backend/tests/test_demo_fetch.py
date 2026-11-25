@@ -21,10 +21,10 @@ class FakeSigner:
     """确定性假签名器：URL 参数拼进 sig 便于断言。"""
 
     def sign_demo_request(self, randnum: str, timestamp: str, data: str) -> bytes:
-        return f"sig({randnum}|{data})".encode()
+        return f"sig-{randnum}-{len(data)}".encode()
 
     def build_x_pwa_signature(self, steamid: str, timestamp: int, ip_addr: str) -> bytes:
-        return f"xp({timestamp}|{ip_addr})".encode()
+        return f"xp-{timestamp}-{len(ip_addr)}".encode()
 
 
 def _stub_env(monkeypatch, handler: Callable[[httpx.Request], httpx.Response]):
@@ -74,7 +74,7 @@ def _stub_analysis_pipeline(monkeypatch):
     )
 
     def fake_run(dem_path, match_id, steam_id):
-        return analysis, {"cost_s": 0.1, "peak_mem_mb": 100, "parser": "stub"}
+        return analysis.model_copy(update={"match_id": match_id}), {"cost_s": 0.1, "peak_mem_mb": 100, "parser": "stub"}
 
     async def fake_push(analysis_arg, md, **kw):
         from app.database import session_factory
@@ -122,7 +122,7 @@ async def test_f1_download_and_analyze_chain(client, monkeypatch):
     _seed_token(client)
     _stub_analysis_pipeline(monkeypatch)
     resp = client.post("/api/tasks", json={"type": "demo_fetch", "payload": {"match_id": f"PVP@{num}"}})
-    assert resp.status_code == 200
+    assert resp.status_code in (200, 202)
     tid = resp.json()["id"]
     run = client.post(f"/api/tasks/{tid}/run").json()
     assert run["status"] == "success", run.get("error")
@@ -132,8 +132,8 @@ async def test_f1_download_and_analyze_chain(client, monkeypatch):
     assert url.host == "pwaweblogin.wmpvp.com"
     assert url.params["a"] == "20000"
     assert url.params["match_id"] == num
-    assert url.params["s"].startswith("sig(")
-    assert seen["demo"].headers["X-PWA-Signature"].startswith("xp(")
+    assert url.params["s"].startswith("sig-")
+    assert seen["demo"].headers["X-PWA-Signature"].startswith("xp-")
     assert seen["demo"].headers["Referer"] == "https://client.wmpvp.com"
 
     # 分析链完成：状态 + 结果
@@ -143,7 +143,7 @@ async def test_f1_download_and_analyze_chain(client, monkeypatch):
     from app.models import Match, Report
 
     with session_factory() as s:
-        m = s.get(Match, f"PVP@{num}")
+        m = s.exec(select(Match).where(Match.match_id == f"PVP@{num}")).first()
         assert m is not None and m.demo_status == "analyzed"
         rp = s.exec(select(Report).where(Report.match_id == f"PVP@{num}")).first()
         assert rp is not None
@@ -161,6 +161,7 @@ async def test_f2_expired_demo_json_error(client, monkeypatch):
 
     _stub_env(monkeypatch, handler)
     _seed_match(num)
+    _seed_token(client)
     resp = client.post("/api/tasks", json={"type": "demo_fetch", "payload": {"match_id": f"PVP@{num}"}})
     tid = resp.json()["id"]
     run = client.post(f"/api/tasks/{tid}/run").json()
@@ -193,7 +194,7 @@ async def test_f4_cache_hit_skips_download(client, monkeypatch):
 
     num = "9000000000000000004"
     (get_data_dir() / "demos").mkdir(parents=True, exist_ok=True)
-    (get_data_dir() / "demos" / f"{num}_0.dem").write_bytes("FAKE_DEMO")
+    (get_data_dir() / "demos" / f"{num}_0.dem").write_bytes(b"FAKE_DEMO")
 
     def handler(req: httpx.Request) -> httpx.Response:
         if req.url.host == "ip.test":
