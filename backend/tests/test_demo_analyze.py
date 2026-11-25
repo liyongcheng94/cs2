@@ -24,8 +24,7 @@ def fake_pipeline(client, monkeypatch, tmp_path):
 
     monkeypatch.setattr(da, "acquire_demo", lambda match_id, cache_dir=None: dem)
     monkeypatch.setattr(da, "run_analysis", lambda dem_path, match_id, steam_id: (analysis, {"cost_s": 0.1, "peak_mem_mb": 100, "parser": "stub"}))
-    gc_calls = []
-    monkeypatch.setattr(da, "gc_raw_demo", lambda p: gc_calls.append(p))
+    gc_calls = []  # 1.3 起 demo 持久保存，模块不再引用 gc_raw_demo
     pushed = {"called": False}
 
     async def fake_push(analysis_arg, md, **kw):
@@ -91,7 +90,9 @@ def test_demo_analyze_happy_path(client, fake_pipeline):
         rp = s.exec(select(Report).where(Report.match_id == "PVP@PIPE1")).first()
         assert rp is not None and rp.content_md
 
-    assert fake_pipeline["gc_calls"] and fake_pipeline["pushed"]["called"] is True
+    assert fake_pipeline["pushed"]["called"] is True
+    # 1.3 起 demo 持久保存（不再 GC raw demo，避免重复下载）
+    assert fake_pipeline["gc_calls"] == []
 
 
 def test_demo_analyze_missing_demo_marks_pending(client, fake_pipeline, monkeypatch):

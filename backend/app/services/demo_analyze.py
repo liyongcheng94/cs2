@@ -1,4 +1,4 @@
-"""demo_analyze 任务编排：acquire → 解析（选型库）→ 复盘（护栏）→ 推送（幂等）→ 磁盘 GC。
+"""demo_analyze 任务编排：acquire → 解析（选型库）→ 复盘（护栏）→ 推送（幂等）。1.3 起 raw demo 持久保存（缓存目录命中即免下载）。
 
 解析引擎接口：run_analysis(dem_path, match_id, steam_id) -> (FourDimAnalysis, meta_dict)
 由 demo_analysis 引擎实现（阶段 2b spike 定选后落地）；此处只编排，不关心解析细节。
@@ -18,7 +18,7 @@ from ..schemas.analysis import FourDimAnalysis
 from . import settings_service
 from .demo_dl import DemoNotAvailableError, acquire_demo
 from .report import PromptVersion, build_report
-from .report_push import gc_raw_demo, push_report
+from .report_push import push_report
 
 # 解析引擎（awpy 选型，见 docs/spike-demo-parsers.md）；测试桩可 monkeypatch 替换
 from .demo_analysis import run_analysis  # noqa: E402
@@ -115,8 +115,8 @@ async def demo_analyze_handler(task: Task, session_factory_fn: Callable[[], Sess
         degraded=report.degraded,
     )
 
-    # 5) 磁盘 GC（raw demo 删除；客户端 zip 原件不动）
-    gc_raw_demo(Path(dem))
+    # 5) demo 持久保存（1.3）：raw demo 留在缓存目录，重复分析免下载；不再 GC
+    logger.info(f"[demo持久] raw demo 保留 {dem}")
 
     return {
         "match_id": match_id,
