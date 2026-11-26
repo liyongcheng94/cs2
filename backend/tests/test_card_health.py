@@ -27,6 +27,7 @@ from app.models import GrenadeCard, GrenadeCardSignal
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("CS2HQ_DATA_DIR", str(tmp_path))
     with TestClient(app) as c:
+        c.post("/api/auth/register", json={"username": "t", "password": "pw123456"})  # Phase 2 登录门禁
         yield c
 
 

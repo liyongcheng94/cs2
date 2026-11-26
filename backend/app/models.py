@@ -16,6 +16,17 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+class User(SQLModel, table=True):
+    """账号体系（Phase 2，2026-11-26）：用户名+密码（pbkdf2）+ JWT cookie；首个注册用户为 admin。"""
+
+    id: int | None = Field(default=None, primary_key=True)
+    username: str = Field(unique=True, index=True)
+    password_hash: str = ""
+    display_name: str = ""
+    is_admin: bool = False
+    created_at: datetime = Field(default_factory=utcnow, sa_type=NAIVE_DT)
+
+
 class Setting(SQLModel, table=True):
     key: str = Field(primary_key=True)
     value_enc: str = ""  # secret 键存 Fernet 密文；普通键存原文
@@ -33,6 +44,7 @@ class Task(SQLModel, table=True):
     result: dict | None = Field(default=None, sa_column=Column(JSON))
     error: str | None = None
     created_at: datetime = Field(default_factory=utcnow, sa_type=NAIVE_DT)
+    user_id: int | None = Field(default=None, index=True)  # 归属用户；None=legacy 仅 admin 可见
     updated_at: datetime = Field(default_factory=utcnow, sa_type=NAIVE_DT)
 
 
@@ -56,6 +68,7 @@ class Match(SQLModel, table=True):
     )  # none/pending_demo/downloaded/analyzed/failed
     raw: dict = Field(default_factory=dict, sa_column=Column(JSON))
     detail_json: dict | None = Field(default=None, sa_column=Column(JSON))  # v1 全场详细数据缓存
+    user_id: int | None = Field(default=None, index=True)  # 归属用户；None=legacy 仅 admin 可见
 
 
 class MatchStat(SQLModel, table=True):
@@ -92,6 +105,7 @@ class DemoAnalysis(SQLModel, table=True):
     cost_s: float | None = None
     peak_mem_mb: float | None = None
     created_at: datetime = Field(default_factory=utcnow, sa_type=NAIVE_DT)
+    user_id: int | None = Field(default=None, index=True)  # 归属用户；None=legacy 仅 admin 可见
 
 
 class Report(SQLModel, table=True):
@@ -106,6 +120,7 @@ class Report(SQLModel, table=True):
     pushed: bool = False
     mv_uuid: str | None = None
     created_at: datetime = Field(default_factory=utcnow, sa_type=NAIVE_DT)
+    user_id: int | None = Field(default=None, index=True)  # 归属用户；None=legacy 仅 admin 可见
 
 
 class BiliVideo(SQLModel, table=True):

@@ -16,10 +16,15 @@ from app.main import create_app  # noqa: E402
 
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
-    """每测试独立数据目录 + 独立 DB 的 TestClient（含 lifespan 建表与种子）。"""
+    """每测试独立数据目录 + 独立 DB 的 TestClient（含 lifespan 建表与种子）。
+
+    Phase 2（2026-11-26）起业务 API 需登录：夹具自动注册首个用户（即 admin），
+    既有测试以 admin 身份运行（可见 legacy 无主数据）。
+    """
     monkeypatch.setenv("CS2HQ_DATA_DIR", str(tmp_path))
     monkeypatch.delenv("CS2HQ_SECRET_KEY", raising=False)
     with TestClient(create_app()) as c:
+        c.post("/api/auth/register", json={"username": "testadmin", "password": "pw123456"})
         yield c
 
 

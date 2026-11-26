@@ -113,7 +113,7 @@ async def test_bili_learn_handler_degraded_flow(client, monkeypatch, tmp_path):
     run = client.post(f"/api/tasks/{task_id}/run")
     assert run.status_code == 200
     body = client.get(f"/api/tasks/{task_id}").json()
-    assert body["status"] == "success", body["error"]
+    assert body["status"] == "success", body.get("error") or body
     assert body["result"]["results"][0]["status"] == "ok"
     assert pushed == ["CS2 道具教学视频"]
 

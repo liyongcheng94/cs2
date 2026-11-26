@@ -20,7 +20,8 @@ def get_engine():
     path = str(get_db_path())
     if path not in _engine_cache:
         _engine_cache[path] = create_engine(
-            f"sqlite:///{path}", connect_args={"check_same_thread": False}
+            f"sqlite:///{path}",
+            connect_args={"check_same_thread": False, "timeout": 30},  # busy_timeout=30s：账号体系多用户并发写下防 database is locked
         )
     return _engine_cache[path]
 
@@ -43,6 +44,11 @@ _MIGRATIONS = [
     "ALTER TABLE chatmessage ADD COLUMN image_ids VARCHAR",
     # DeepSeek 分享对话导入幂等键
     "ALTER TABLE chatsession ADD COLUMN import_key VARCHAR",
+    # 账号体系（Phase 2，2026-11-26）：数据行归属用户；None=legacy 仅 admin 可见
+    "ALTER TABLE task ADD COLUMN user_id INTEGER",
+    "ALTER TABLE match ADD COLUMN user_id INTEGER",
+    "ALTER TABLE demoanalysis ADD COLUMN user_id INTEGER",
+    "ALTER TABLE report ADD COLUMN user_id INTEGER",
     # 学道具 v3（2026-11-23 时效健康度）：卡健康列 + 视频发布时间列
     "ALTER TABLE grenadecard ADD COLUMN health VARCHAR DEFAULT 'alive'",
     "ALTER TABLE grenadecard ADD COLUMN video_pubdate INTEGER",

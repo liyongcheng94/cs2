@@ -34,7 +34,7 @@ def _parse_played_at(raw: dict) -> datetime:
         return utcnow()
 
 
-def upsert_match(session: Session, raw: dict, my_steam_id: str) -> Match:
+def upsert_match(session: Session, raw: dict, my_steam_id: str, owner_user_id: int | None = None) -> Match:
     """按 matchId 幂等写入 Match + MatchStat（重复同步不产生新行）。
 
     真实结构（2026-11-22 实测）：winTeam/team 为 1/2 整数，胜负 = winTeam == team；
@@ -61,6 +61,7 @@ def upsert_match(session: Session, raw: dict, my_steam_id: str) -> Match:
             mode=str(raw.get("mode") or raw.get("matchType") or ""),
             played_at=_parse_played_at(raw),
             raw=raw,
+            user_id=owner_user_id,
         )
         session.add(match)
     else:
@@ -68,6 +69,8 @@ def upsert_match(session: Session, raw: dict, my_steam_id: str) -> Match:
         match.map_name = str(raw.get("mapName") or match.map_name)
         match.score1, match.score2 = score1, score2
         match.win = win
+        if owner_user_id is not None and match.user_id is None:
+            match.user_id = owner_user_id  # 首次归属即固化，避免被他人同步抢占
         match.raw = raw
 
     mvp = raw.get("mvp") or raw.get("pvpMvp")
@@ -118,7 +121,7 @@ async def sync_matches(
                 existing = session.exec(
                     select(Match).where(Match.match_id == str(raw.get("matchId")))
                 ).first()
-                upsert_match(session, raw, api.steam_id)
+                upsert_match(session, raw, api.steam_id, owner_user_id=getattr(task, 'user_id', None))
                 if existing is None:
                     inserted += 1
                 else:

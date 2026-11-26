@@ -1,7 +1,11 @@
-from fastapi import APIRouter, HTTPException
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import select
 
 from ..database import SessionDep, session_factory
+from .auth_api import CurrentUser
+from ..models import User
 from ..models import DemoAnalysis, Match, MatchStat, Report, SeasonStats
 from ..services.wanmei import WanmeiAuthError, WanmeiError
 
@@ -23,6 +27,13 @@ MAP_NAME_EN = {
 router = APIRouter(prefix="/matches", tags=["matches"])
 
 
+def _scoped(stmt, user: User):
+    """数据隔离：admin 看全部（含 legacy 无主行）；普通用户只看自己的行。"""
+    if user.is_admin:
+        return stmt
+    return stmt.where(Match.user_id == user.id)
+
+
 @router.get("/stats/season")
 def season_stats(session: SessionDep) -> dict:
     """赛季统计快照（趋势/雷达/热图数据源）。"""
@@ -35,9 +46,9 @@ def season_stats(session: SessionDep) -> dict:
 
 
 @router.get("/stats/trends")
-def stats_trends(session: SessionDep) -> dict:
+def stats_trends(session: SessionDep, user: CurrentUser) -> dict:
     """长期追踪（1.1）：逐场聚合点（rating/adr/经济/道具指标）+ 地图胜率。"""
-    matches = session.exec(select(Match).order_by(Match.played_at.desc())).all()
+    matches = session.exec(_scoped(select(Match).order_by(Match.played_at.desc()), user)).all()
     stats = {s.match_id: s for s in session.exec(select(MatchStat)).all()}
     analyses = {a.match_id: a.payload or {} for a in session.exec(select(DemoAnalysis)).all()}
 
@@ -71,8 +82,8 @@ def stats_trends(session: SessionDep) -> dict:
 
 
 @router.get("")
-def list_matches(session: SessionDep) -> list[dict]:
-    stmt = select(Match).order_by(Match.played_at.desc())
+def list_matches(session: SessionDep, user: CurrentUser) -> list[dict]:
+    stmt = _scoped(select(Match).order_by(Match.played_at.desc()), user)
     return [
         {
             "id": m.id,
@@ -92,9 +103,9 @@ def list_matches(session: SessionDep) -> list[dict]:
 
 
 @router.get("/{match_id}")
-def get_match(match_id: int, session: SessionDep) -> dict:
+def get_match(match_id: int, session: SessionDep, user: CurrentUser) -> dict:
     match = session.get(Match, match_id)
-    if match is None:
+    if match is None or not (user.is_admin or match.user_id in (user.id, None)):
         raise HTTPException(status_code=404, detail="对局不存在")
     stat = session.exec(select(MatchStat).where(MatchStat.match_id == match.match_id)).first()
     analysis = session.exec(
@@ -121,10 +132,10 @@ def get_match(match_id: int, session: SessionDep) -> dict:
 
 
 @router.get("/{match_id}/detail-v1")
-async def match_detail_v1(match_id: int, session: SessionDep) -> dict:
+async def match_detail_v1(match_id: int, session: SessionDep, user: CurrentUser) -> dict:
     """全场详细数据（v1 端点：双方 10 人 KAST/伤害/首杀/补枪/道具效果/命中率）；结果缓存进 Match.detail_json。"""
     match = session.get(Match, match_id)
-    if match is None:
+    if match is None or not (user.is_admin or match.user_id in (user.id, None)):
         raise HTTPException(status_code=404, detail="对局不存在")
     if match.detail_json:
         return match.detail_json
@@ -147,10 +158,10 @@ async def match_detail_v1(match_id: int, session: SessionDep) -> dict:
 
 
 @router.get("/{match_id}/report-md")
-def match_report_md(match_id: int, session: SessionDep) -> dict:
+def match_report_md(match_id: int, session: SessionDep, user: CurrentUser) -> dict:
     """复盘 Markdown 内容（AI 复盘 Tab 数据源）。"""
     match = session.get(Match, match_id)
-    if match is None:
+    if match is None or not (user.is_admin or match.user_id in (user.id, None)):
         raise HTTPException(status_code=404, detail="对局不存在")
     report = session.exec(select(Report).where(Report.match_id == match.match_id)).first()
     if report is None:

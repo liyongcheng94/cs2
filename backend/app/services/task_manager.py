@@ -17,11 +17,12 @@ HANDLERS: dict[str, Handler] = {}
 
 
 def create_task(
-    session: Session, type_: str, payload: dict | None = None, priority: int = 5
+    session: Session, type_: str, payload: dict | None = None, priority: int = 5,
+    user_id: int | None = None,
 ) -> Task:
     if type_ not in HANDLERS:
         raise ValueError(f"未知任务类型：{type_}")
-    task = Task(type=type_, payload=payload or {}, priority=priority)
+    task = Task(type=type_, payload=payload or {}, priority=priority, user_id=user_id)
     session.add(task)
     session.commit()
     session.refresh(task)
