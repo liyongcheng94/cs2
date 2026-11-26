@@ -1,0 +1,91 @@
+{
+  "_meta": {
+    "game": "Counter-Strike 2",
+    "verified_date": "2026-11-26",
+    "sources": [
+      "https://counterstrike.fandom.com/wiki/Buy_menu (CS2 段)",
+      "https://gamerstogether.cz/en/cs2-economy-weapon-prices/ (2026-10-19 验证，含补丁注记)",
+      "Steam 补丁公告: 2025-01-28 (M4A4/FAMAS 降价), 2024-05-23 (燃烧弹降价), 2026-01-21 (MP7/MP5-SD/野牛降价)"
+    ],
+    "conventions": {
+      "team": "T | CT | both",
+      "price": "美元",
+      "kill_reward": "竞技模式击杀奖励",
+      "uncertain": "true = 源之间有分歧，用前先在游戏内核对"
+    }
+  },
+  "pistols": [
+    { "name": "Glock-18",      "team": "T",   "price": 200,  "note": "起始手枪" },
+    { "name": "USP-S",         "team": "CT",  "price": 200,  "note": "起始手枪" },
+    { "name": "P2000",         "team": "CT",  "price": 200,  "note": "起始手枪备选" },
+    { "name": "Dual Berettas", "team": "both","price": 300 },
+    { "name": "P250",          "team": "both","price": 300 },
+    { "name": "Tec-9",         "team": "T",   "price": 500 },
+    { "name": "Five-SeveN",    "team": "CT",  "price": 500 },
+    { "name": "CZ75-Auto",     "team": "both","price": 500, "kill_reward": 300, "kill_reward_casual": 150 },
+    { "name": "Desert Eagle",  "team": "both","price": 700 },
+    { "name": "R8 Revolver",   "team": "both","price": 600 }
+  ],
+  "smg": [
+    { "name": "MAC-10",   "team": "T",    "price": 1050, "kill_reward": 600 },
+    { "name": "MP9",      "team": "CT",   "price": 1250, "kill_reward": 600 },
+    { "name": "MP7",      "team": "both", "price": 1400, "kill_reward": 600, "note": "2026-01-21 由 $1500 降价 $100" },
+    { "name": "MP5-SD",   "team": "both", "price": 1400, "kill_reward": 600, "note": "2026-01-21 由 $1500 降价 $100" },
+    { "name": "UMP-45",   "team": "both", "price": 1200, "kill_reward": 600 },
+    { "name": "P90",      "team": "both", "price": 2350, "kill_reward": 300, "note": "P90 击杀只给 $300" },
+    { "name": "PP-Bizon", "team": "both", "price": 1300, "kill_reward": 600, "uncertain": true, "note": "2026-01-21 降价 $100 → $1300；fandom 仍显示 $1400（疑滞后）" }
+  ],
+  "heavy": [
+    { "name": "Nova",      "team": "both","price": 1050, "kill_reward": 900 },
+    { "name": "Sawed-Off", "team": "T",   "price": 1100, "kill_reward": 900 },
+    { "name": "MAG-7",     "team": "CT",  "price": 1300, "kill_reward": 900 },
+    { "name": "XM1014",    "team": "both","price": 2000, "kill_reward": 600, "kill_reward_casual": 300 },
+    { "name": "M249",      "team": "both","price": 5200 },
+    { "name": "Negev",     "team": "both","price": 1700 }
+  ],
+  "rifles": [
+    { "name": "Galil AR", "team": "T",   "price": 1800 },
+    { "name": "FAMAS",    "team": "CT",  "price": 1950, "note": "2025-01-28 由 $2050 降价" },
+    { "name": "AK-47",    "team": "T",   "price": 2700 },
+    { "name": "M4A4",     "team": "CT",  "price": 2900, "note": "2025-01-28 由 $3100 降价" },
+    { "name": "M4A1-S",   "team": "CT",  "price": 2900 },
+    { "name": "SG 553",   "team": "T",   "price": 3000 },
+    { "name": "AUG",      "team": "CT",  "price": 3300 },
+    { "name": "SSG 08",   "team": "both","price": 1700 },
+    { "name": "AWP",      "team": "both","price": 4750 },
+    { "name": "G3SG1",    "team": "T",   "price": 5000 },
+    { "name": "SCAR-20",  "team": "CT",  "price": 5000 }
+  ],
+  "gear": [
+    { "name": "Kevlar Vest",        "team": "both","price": 650 },
+    { "name": "Kevlar Vest + Helmet","team": "both","price": 1000 },
+    { "name": "Zeus x27",           "team": "both","price": 200, "kill_reward": 100 },
+    { "name": "Defuse Kit",         "team": "CT",  "price": 400 }
+  ],
+  "grenades": [
+    { "name": "Molotov",           "team": "T",   "price": 400 },
+    { "name": "Incendiary Grenade","team": "CT",  "price": 500, "note": "2024-05-23 由 $600 降价" },
+    { "name": "Decoy Grenade",     "team": "both","price": 50 },
+    { "name": "Flashbang",         "team": "both","price": 200 },
+    { "name": "HE Grenade",        "team": "both","price": 300 },
+    { "name": "Smoke Grenade",     "team": "both","price": 300 }
+  ],
+  "economy": {
+    "kill_reward_default": 300,
+    "kill_reward_knife": 1500,
+    "loss_bonus_ladder": [1400, 1900, 2400, 2900, 3400],
+    "t_bomb_planted_but_defused": 600,
+    "ct_team_award_per_t_kill": 50,
+    "notes": [
+      "CT 自 2025-07-16 起竞技模式每杀一个 T 全队 +$50（无论输赢回合）",
+      "2026-03-18 起换弹匣会丢弃整个弹匣（含剩余子弹），多数武器带 3 个备用弹匣"
+    ]
+  },
+  "full_buy_budget": "满编（甲+头+主枪+道具）约 $4000-4400",
+  "common_mistakes_guard": [
+    "MAC-10 只有 T 能买；MP9 只有 CT 能买 —— 两者不可互换",
+    "Sawed-Off 仅 T；MAG-7 仅 CT；Galil 仅 T；FAMAS 仅 CT；AK 仅 T；M4A4/M4A1-S 仅 CT；SG 553 仅 T；AUG 仅 CT；Tec-9 仅 T；Five-SeveN 仅 CT；Glock 仅 T；USP-S/P2000 仅 CT；Molotov 仅 T；Incendiary 仅 CT",
+    "MP7 / MP5-SD / UMP-45 / P90 / PP-Bizon / Nova / XM1014 / M249 / Negev / SSG 08 / AWP / Deagle / R8 / CZ75 / P250 / Dual Berettas 两边都能买",
+    "引用价格时注明来源与日期；fandom 部分条目滞后于补丁（如 PP-Bizon）"
+  ]
+}
