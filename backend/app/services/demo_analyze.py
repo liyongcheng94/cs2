@@ -48,8 +48,11 @@ async def demo_analyze_handler(task: Task, session_factory_fn: Callable[[], Sess
         raise ValueError("payload 缺 match_id")
 
     with session_factory_fn() as session:
-        steam_id = settings_service.get_value(session, "wanmei.steam_id") or ""
+        own_steam_id = settings_service.get_value(session, "wanmei.steam_id") or ""
         _ensure_match_row(session, match_id)
+    guest_steam_id = task.payload.get("steam_id")
+    guest = bool(guest_steam_id) and str(guest_steam_id) != str(own_steam_id)
+    steam_id = str(guest_steam_id) if guest_steam_id else own_steam_id
 
     # 1) 取 demo（客户端协作；拿不到 → pending_demo 提示）
     try:
@@ -64,6 +67,16 @@ async def demo_analyze_handler(task: Task, session_factory_fn: Callable[[], Sess
         raise ValueError("解析引擎未初始化（阶段 2b spike 后注入 run_analysis）")
     async with ANALYSIS_SEMAPHORE:
         analysis, meta = await asyncio.to_thread(run_analysis, Path(dem), match_id, steam_id)
+    if guest:
+        # 客座分析（他人视角）：只算不落库不推送，结果随 task.result 返回
+        logger.info(f"[demo解析] matchId={match_id} 客座分析 steam_id={steam_id} 耗时={meta.get('cost_s')}s")
+        return {
+            "match_id": match_id,
+            "guest": True,
+            "steam_id": steam_id,
+            "parser": meta.get("parser"),
+            "analysis": analysis.model_dump(),
+        }
     with session_factory_fn() as session:
         row = session.exec(select(DemoAnalysis).where(DemoAnalysis.match_id == match_id)).first()
         if row is None:

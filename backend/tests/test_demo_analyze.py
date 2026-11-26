@@ -1,9 +1,11 @@
 """demo_analyze 任务编排契约：取 demo → 解析 → 复盘 → 推送 → 磁盘 GC；MindVault/AI 缺失逐级降级。"""
 import asyncio
+import json
 from pathlib import Path
 
 import pytest
 
+from sqlmodel import select
 from app.schemas.analysis import AnalysisMeta, DuelBucket, DuelDim, FourDimAnalysis
 
 
@@ -112,3 +114,37 @@ def test_demo_analyze_missing_demo_marks_pending(client, fake_pipeline, monkeypa
     body = client.get(f"/api/tasks/{task_id}").json()
     assert body["status"] == "failed"
     assert "客户端" in body["error"]
+
+
+def test_guest_steam_id_override_analysis_only(client, fake_pipeline):
+    """场景（客座分析）：payload 带 steam_id 覆盖 → 用该 steam_id 解析；
+    不覆盖 DemoAnalysis/Report（不顶掉本人复盘），结果随 task.result 返回。"""
+    import json
+
+    import app.services.demo_analyze as da
+    from app.database import session_factory
+    from app.models import DemoAnalysis
+    from app.services import task_manager
+
+    da.register()
+    seen = {}
+    orig_run = da.run_analysis
+
+    def spy_run(dem_path, match_id, steam_id):
+        seen["steam_id"] = steam_id
+        return orig_run(dem_path, match_id, steam_id)
+
+    da.run_analysis = spy_run
+
+    with session_factory() as s:
+        t = task_manager.create_task(s, "demo_analyze", {"match_id": "PVP@PIPE1", "steam_id": "76561199322885056"})
+        tid = t.id
+        s.commit()
+    res = asyncio.run(task_manager.run_task(tid))
+    assert res.status == "success"
+    assert seen["steam_id"] == "76561199322885056"
+    # 客座分析：本人复盘行不被覆盖、不推送
+    with session_factory() as s:
+        assert s.exec(select(DemoAnalysis).where(DemoAnalysis.match_id == "PVP@PIPE1")).first() is None
+    assert res.result.get("guest") is True
+    assert res.result.get("analysis") is not None
