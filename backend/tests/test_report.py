@@ -166,3 +166,19 @@ def test_rule_based_focus_economic_redline():
     a = FourDimAnalysis(match_id="PVP@E", economy=EconomyDim(full_buy_lose_rate=0.6))
     focus = rule_based_focus(a)
     assert focus is not None and "满编" in focus
+
+
+def test_ai_review_prompt_carries_waste_rate_glossary():
+    """
+    Given 数据审计（2026-11-26）确认两处 waste_rate 口径易混
+    When  _ai_review 组装 system prompt（无外部 prompt 文件，走 fallback）
+    Then  prompt 必须同时说明「闪光效率浪费」与「道具买而不扔」两个口径，防止 AI 混用
+    """
+    import inspect
+
+    from app.services import report as rp
+
+    src = inspect.getsource(rp._ai_review)
+    assert "闪光效率浪费" in src
+    assert "买而不扔" in src
+    assert "usage[].waste_rate" in src
