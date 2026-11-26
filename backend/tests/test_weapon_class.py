@@ -37,3 +37,17 @@ def test_melee_grenade_env_classes():
 def test_unknown_still_other():
     """Given 真正未知武器名，When 归类，Then other 兜底。"""
     assert weapon_class("mystery_gun_9000") == "other"
+
+
+def test_grenade_type_normalization():
+    """Given demoparser2 的 grenade type 值，When 归一化，Then flashbang→flash 且所有类型可入账。"""
+    from app.services.demo_analysis import normalize_grenade_type
+
+    assert normalize_grenade_type("flashbang") == "flash"  # 此前被 GRENADE_TYPES 过滤 → flash 恒 0
+    assert normalize_grenade_type("flash") == "flash"
+    assert normalize_grenade_type("smoke") == "smoke"
+    assert normalize_grenade_type("he") == "he"
+    assert normalize_grenade_type("molotov") == "molotov"
+    assert normalize_grenade_type("incendiary") == "molotov"
+    assert normalize_grenade_type("decoy") == "decoy"
+    assert normalize_grenade_type("unknown_x") is None

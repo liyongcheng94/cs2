@@ -320,6 +320,16 @@ GRENADE_PRICES = {"smoke": 300, "flash": 200, "molotov": 400, "incendiary": 600,
 GRENADE_TYPES = {"smoke", "flash", "molotov", "incendiary", "he", "decoy"}
 
 
+def normalize_grenade_type(gtype: str | None) -> str | None:
+    """归一化 demoparser2 的 grenade type；未知类型返回 None（不入账）。"""
+    g = (gtype or "").lower()
+    if g == "flashbang":
+        return "flash"  # demoparser2 闪光弹叫 flashbang（此前被过滤 → flash 计数恒 0）
+    if g == "incendiary":
+        return "molotov"  # CT 燃烧弹与 T 燃烧瓶合并
+    return g if g in GRENADE_TYPES else None
+
+
 def analyze_utility_players(demo, grenades, hurts, kills) -> list[UtilityPlayer]:
     """全场 10 人的道具统计（道具分析 Tab）：投掷分类/致盲敌方与队友/道具伤害/花费估算。
 
@@ -346,8 +356,8 @@ def analyze_utility_players(demo, grenades, hurts, kills) -> list[UtilityPlayer]
     for t in throws:
         pname = str(t.get("thrower_name") or "").strip()
         pid = name_to_sid.get(pname) or _sid(t.get("thrower_steamid"))
-        gtype = (t.get("type") or "").lower()
-        if gtype not in GRENADE_TYPES:
+        gtype = normalize_grenade_type(t.get("type"))
+        if gtype is None:
             continue
         acc = _acc(pid, pname, t.get("thrower_side"))
         if gtype in ("molotov", "incendiary"):
