@@ -30,7 +30,7 @@ import { LoginPage } from "./components/LoginPage";
 import type { MatchDetail, MatchSummary, Profile, TaskItem } from "./types";
 
 const { Header, Content } = Layout;
-const { Title } = Typography;
+const { Title, Text } = Typography;
 
 // 当前登录用户（GET /auth/me；401 事件切回登录页）
 interface Me {
@@ -154,9 +154,9 @@ function OverviewPage() {
         <SeasonTrends data={season.data.data as Record<string, any>} />
       ) : (
         <Card size="small">
-          <span style={{ color: "#999", fontSize: 12 }}>
+          <Text type="secondary" style={{ fontSize: 12 }}>
             赛季统计尚未同步——点上方任意一次「同步」后自动生成趋势图
-          </span>
+          </Text>
         </Card>
       )}
     </Space>
@@ -248,9 +248,9 @@ function MatchesPage() {
         >
           从完美平台同步
         </Button>
-        <span style={{ color: "#999", fontSize: 12 }}>
+        <Text type="secondary" style={{ fontSize: 12 }}>
           拉 3 页 / 次，限速 2s；token 失效会熔断提示重登
-        </span>
+        </Text>
       </Space>
       <Table
         rowKey="id"
