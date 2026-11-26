@@ -56,7 +56,7 @@ export function UtilityScatter({ analysis, mapEn }: { analysis: FourDimAnalysisS
         graphic: [
           {
             type: "image",
-            style: { image: `/radar/${mapEn}.png`, x: 0, y: 0, width: meta.width, height: meta.height },
+            style: { image: `${import.meta.env.BASE_URL}radar/${mapEn}.png`, x: 0, y: 0, width: meta.width, height: meta.height },
             silent: true,
           },
         ],

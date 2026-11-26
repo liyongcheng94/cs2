@@ -46,10 +46,12 @@ WEAPON_CLASSES = {
     "awp": "sniper", "ssg08": "sniper", "scar20": "sniper",
     "ak47": "rifle", "m4a1": "rifle", "m4a1_silencer": "rifle", "m4a4": "rifle",
     "galil": "rifle", "galilar": "rifle", "famas": "rifle", "sg556": "rifle", "aug": "rifle",
-    "glock": "pistol", "usp_silencer": "pistol", "deagle": "pistol", "p250": "pistol",
+    "glock": "pistol", "usp": "pistol", "usp_silencer": "pistol", "hkp2000": "pistol",
+    "deagle": "pistol", "p250": "pistol", "revolver": "pistol",
     "tec9": "pistol", "fiveseven": "pistol", "cz75a": "pistol", "dual_berettas": "pistol",
+    "elite": "pistol",
     "mac10": "smg", "mp9": "smg", "mp7": "smg", "ump45": "smg", "p90": "smg", "bizon": "smg",
-    "mp5sd": "smg", "negev": "other",
+        "mp5sd": "smg", "negev": "other", "m249": "other",
     "nova": "shotgun", "xm1014": "shotgun", "mag7": "shotgun", "sawedoff": "shotgun",
     "knife": "melee", "knife_t": "melee", "knife_push": "melee", "bayonet": "melee",
     "hegrenade": "nade", "inferno": "nade", "molotov": "nade", "flashbang": "nade",
@@ -73,7 +75,11 @@ def weapon_class(weapon: str | None) -> str:
     """武器归类；完美平台 demo 的饰品皮肤带后缀（_txzNN/_vip）先剥离再匹配。"""
     w = (weapon or "").lower()
     w = re.sub(r"_(txz\d+|vip)$", "", w)  # 完美皮肤后缀（实测 ak47_txz02/awp_txz02/m4a1_vip/glock_vip…）
-    return WEAPON_CLASSES.get(w, "other")
+    if w in WEAPON_CLASSES:
+        return WEAPON_CLASSES[w]
+    # 多段后缀皮肤（实测 m4a1_ace_txz19）：剥一层仍不精确命中 → 最长已知前缀兜底
+    best = [k for k in WEAPON_CLASSES if w.startswith(k)]
+    return WEAPON_CLASSES[max(best, key=len)] if best else "other"
 
 
 def distance_bucket(dist_m: float) -> str:

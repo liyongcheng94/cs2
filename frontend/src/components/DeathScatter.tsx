@@ -15,7 +15,7 @@ interface MapMeta {
 let MAP_DATA: Record<string, MapMeta> | null = null;
 export async function loadMapData(): Promise<Record<string, MapMeta>> {
   if (MAP_DATA) return MAP_DATA;
-  const resp = await fetch("/radar/map_data.json");
+  const resp = await fetch(`${import.meta.env.BASE_URL}radar/map_data.json`);
   MAP_DATA = (await resp.json()) as Record<string, MapMeta>;
   return MAP_DATA;
 }
@@ -73,7 +73,7 @@ export function DeathScatter({ analysis, mapEn }: { analysis: FourDimAnalysisSha
         graphic: [
           {
             type: "image",
-            style: { image: `/radar/${mapEn}.png`, x: 0, y: 0, width: meta.width, height: meta.height },
+            style: { image: `${import.meta.env.BASE_URL}radar/${mapEn}.png`, x: 0, y: 0, width: meta.width, height: meta.height },
             silent: true,
           },
         ],

@@ -51,3 +51,16 @@ def test_grenade_type_normalization():
     assert normalize_grenade_type("incendiary") == "molotov"
     assert normalize_grenade_type("decoy") == "decoy"
     assert normalize_grenade_type("unknown_x") is None
+
+
+def test_elite_dual_berettas_classified():
+    """Given 完美皮肤后缀 elite_txz02（双枪贝瑞塔），When 归类，Then pistol 而非 other（对枪矩阵 100% bug）。"""
+    assert weapon_class("elite") == "pistol"
+    assert weapon_class("elite_txz02") == "pistol"
+
+
+def test_multi_suffix_skin_falls_back_to_base_prefix():
+    """Given 多段后缀皮肤名 m4a1_ace_txz19，When 剥离子后缀仍不精确命中，Then 按最长已知前缀兜底 rifle。"""
+    assert weapon_class("m4a1_ace_txz19") == "rifle"
+    assert weapon_class("m4a1_ace") == "rifle"
+    assert weapon_class("totally_unknown_gun") == "other"
