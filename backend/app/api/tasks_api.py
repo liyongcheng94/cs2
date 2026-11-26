@@ -75,10 +75,10 @@ async def run_task(task_id: int, session: SessionDep) -> dict:
 
 
 def _owned_task(session, task_id: int, user):
-    """普通用户只能读写自己的任务；admin 全量。"""
+    """普通用户只能读写自己的任务；admin 全量。legacy（user_id=None）仅 admin 可见（与 matches 口径一致）。"""
     task = session.get(Task, task_id)
     if task is None:
         return None
-    if not user.is_admin and task.user_id not in (user.id, None):
+    if not user.is_admin and task.user_id != user.id:
         return None
     return task

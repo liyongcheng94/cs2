@@ -122,3 +122,43 @@ def test_token_has_no_iat_claim_wsl_clock_drift_safe():
     assert "iat" not in payload, "iat 会在时钟回跳时触发 ImmatureSignatureError（随机 401 根因）"
     assert "nbf" not in payload
     assert auth_service.decode_user_id(token) == 7
+
+
+def test_legacy_task_hidden_from_normal_user(client):
+    """
+    Given 库里有 legacy 无主任务（user_id=None）与 admin 用户
+    When  普通用户 GET 该任务 / 列表
+    Then  404 / 列表不含；admin 可见。与 matches 口径一致（legacy 仅 admin 可见）。
+    """
+    # admin 登录（首用户），造一条 legacy 任务（直接落库 user_id=None）
+    client.post("/api/auth/login", json={"username": "testadmin", "password": "pw123456"})
+    from sqlmodel import Session
+
+    from app.database import session_factory
+    from app.models import Task
+
+    with session_factory() as s:
+        legacy = Task(type="wanmei_sync", payload={}, priority=5)
+        s.add(legacy)
+        s.commit()
+        legacy_id = legacy.id
+
+    # 注册普通用户
+    client.post("/api/auth/register", json={"username": "mate", "password": "pw123456"})
+    lc = __import__("fastapi.testclient", fromlist=["TestClient"])
+    _ = lc  # noqa
+    # 用普通用户身份访问
+    import json as _json
+
+    resp = client.post("/api/auth/login", json={"username": "mate", "password": "pw123456"})
+    assert resp.status_code == 200
+    # 上面 login 覆盖了 cookie：mate 现在是当前用户
+    r = client.get(f"/api/tasks/{legacy_id}")
+    assert r.status_code == 404, r.text
+    listing = client.get("/api/tasks").json()
+    assert all(t["id"] != legacy_id for t in listing)
+    # admin 仍可见
+    client.post("/api/auth/login", json={"username": "testadmin", "password": "pw123456"})
+    r2 = client.get(f"/api/tasks/{legacy_id}")
+    assert r2.status_code == 200
+    assert _json.loads(_json.dumps(r2.json()))["id"] == legacy_id
