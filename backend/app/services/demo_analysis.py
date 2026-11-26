@@ -320,6 +320,51 @@ GRENADE_PRICES = {"smoke": 300, "flash": 200, "molotov": 400, "incendiary": 600,
 GRENADE_TYPES = {"smoke", "flash", "molotov", "incendiary", "he", "decoy"}
 
 
+def normalize_side(side: str | None) -> str | None:
+    """阵营写法归一化：awpy terrorist/counter-terrorist、round_end T/CT、team_name TERRORIST/CT → "T"/"CT"。"""
+    s = (side or "").lower()
+    if s in ("t", "terrorist"):
+        return "T"
+    if s in ("ct", "cterrorist", "counter-terrorist", "counter terrorist"):
+        return "CT"
+    return None
+
+
+def analyze_pistol_rounds(kills, rounds, steam_id: int):
+    """手枪局维度：第 1 / 13 回合（MR12）。胜负= winner_side(归一化) == 我方阵营(同半场众数)。"""
+    from collections import Counter
+
+    from ..schemas.analysis import PistolRound, PistolRoundsDim
+
+    kd = kills.to_dicts()
+    half_side: dict[int, str | None] = {}
+    for r in kd:
+        rn = r.get("total_rounds_played") or 0
+        if rn not in (0,):
+            half = 1 if rn <= 12 else 2
+            for a, u in (("attacker_steamid", "attacker_side"), ("victim_steamid", "victim_side")):
+                if r.get(a) == steam_id and r.get(u):
+                    half_side.setdefault(half, normalize_side(r.get(u)))
+    rnd = rounds.to_dicts()
+    out = []
+    for pr_no in (1, 13):
+        wrow = next((r for r in rnd if r.get("round_num") == pr_no), None)
+        winner = normalize_side((wrow or {}).get("winner_side"))
+        my_side = half_side.get(1 if pr_no <= 12 else 2)
+        won = (winner == my_side) if (winner and my_side) else None
+        my_kills = sum(1 for r in kd if (r.get("total_rounds_played") == pr_no) and r.get("attacker_steamid") == steam_id)
+        my_deaths = sum(1 for r in kd if (r.get("total_rounds_played") == pr_no) and r.get("victim_steamid") == steam_id)
+        out.append(PistolRound(round_no=pr_no, my_side=my_side, won=won, my_kills=my_kills, my_deaths=my_deaths))
+    t = [x for x in out if x.my_side == "T"]
+    ct = [x for x in out if x.my_side == "CT"]
+    return PistolRoundsDim(
+        rounds=out,
+        t_won=sum(1 for x in t if x.won), t_total=len(t),
+        ct_won=sum(1 for x in ct if x.won), ct_total=len(ct),
+        won=sum(1 for x in out if x.won), total=len(out),
+    )
+
+
 def normalize_grenade_type(gtype: str | None) -> str | None:
     """归一化 demoparser2 的 grenade type；未知类型返回 None（不入账）。"""
     g = (gtype or "").lower()
@@ -589,6 +634,7 @@ def run_analysis(dem_path, match_id: str, steam_id: str) -> tuple[FourDimAnalysi
         utility_dim.players = utility_players
         utility_dim.spots = collect_utility_spots(demo, sid, user_side)
         highlights = detect_highlights(kills, rounds, sid, user_side)
+        pistol_dim = analyze_pistol_rounds(kills, rounds, sid)
 
         analysis = FourDimAnalysis(
             match_id=match_id,
@@ -597,6 +643,7 @@ def run_analysis(dem_path, match_id: str, steam_id: str) -> tuple[FourDimAnalysi
             utility=utility_dim,
             duels=duels_dim,
             highlights=highlights,
+            pistol_rounds=pistol_dim,
             meta=AnalysisMeta(parser="awpy 3.3.0"),
         )
     finally:

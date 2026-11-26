@@ -145,6 +145,26 @@ class HighlightMoment(BaseModel):
     clutch: bool | None = None  # 时刻起点队内存活 ≤2（残局近似）
 
 
+class PistolRound(BaseModel):
+    """单个手枪局（第 1 / 13 回合，MR12）。"""
+
+    round_no: int
+    my_side: str | None = None  # "T" / "CT"（整半场无参与行则 None）
+    won: bool | None = None
+    my_kills: int = 0
+    my_deaths: int = 0
+
+
+class PistolRoundsDim(BaseModel):
+    rounds: list[PistolRound] = Field(default_factory=list)
+    t_won: int = 0
+    t_total: int = 0
+    ct_won: int = 0
+    ct_total: int = 0
+    won: int = 0
+    total: int = 0
+
+
 class FourDimAnalysis(BaseModel):
     schema_version: str = SCHEMA_VERSION
     match_id: str
@@ -153,6 +173,7 @@ class FourDimAnalysis(BaseModel):
     utility: UtilityDim = Field(default_factory=UtilityDim)
     duels: DuelDim = Field(default_factory=DuelDim)
     highlights: list[HighlightMoment] = Field(default_factory=list)  # 1.1：TopN 可看性时刻
+    pistol_rounds: PistolRoundsDim | None = None  # 1.4：手枪局维度（第 1/13 回合）
     server_ratings: ServerRatings | None = None  # 六维能力评分（demo_analyze 拉到 v1 数据后回填）
     meta: AnalysisMeta = Field(
         default_factory=lambda: AnalysisMeta(parser="unknown")
