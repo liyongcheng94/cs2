@@ -390,14 +390,14 @@ function SettingsPage() {
             label="B站 SESSDATA"
             tooltip="登录 B 站后从浏览器 cookie 复制；用于字幕抓取"
           >
-            <Input.Password placeholder="粘贴即存" />
+            <Input.Password placeholder="粘贴即存" visibilityToggle={false} />
           </Form.Item>
           <Form.Item
             name="ai.api_key"
             label="AI API Key（DeepSeek）"
             tooltip="复盘总结/道具卡抽取用；MindVault 设置页同一 Key 可复用"
           >
-            <Input.Password placeholder="sk-... 粘贴即存" />
+            <Input.Password placeholder="sk-... 粘贴即存" visibilityToggle={false} />
           </Form.Item>
           <Form.Item
             name="moments.dir"

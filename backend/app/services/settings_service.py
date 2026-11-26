@@ -6,7 +6,7 @@ from sqlmodel import Session, select
 from ..models import Setting, utcnow
 from . import crypto
 
-SECRET_KEYS = {"wanmei.access_token", "bili.sessdata", "mindvault.password"}
+SECRET_KEYS = {"wanmei.access_token", "bili.sessdata", "mindvault.password", "ai.api_key"}
 
 DEFAULTS: dict[str, str] = {
     "mv.base_url": "http://127.0.0.1:8001",
@@ -49,8 +49,12 @@ def get_all_masked(session: Session) -> dict[str, str]:
 
 
 def get_detail(session: Session) -> dict[str, str]:
+    """detail 亦脱敏：机密键任何 API 响应都不得出现明文。"""
     rows = session.exec(select(Setting)).all()
     out = dict(DEFAULTS)
     for key in {r.key for r in rows}:
-        out[key] = get_value(session, key) or ""
+        val = get_value(session, key) or ""
+        if key in SECRET_KEYS and val:
+            val = "****" + val[-2:] if len(val) > 2 else "****"
+        out[key] = val
     return out
