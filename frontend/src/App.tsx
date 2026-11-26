@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Alert,
   Button,
   Card,
   Col,
+  Dropdown,
   Form,
   Input,
   Layout,
@@ -24,10 +25,83 @@ import { SeasonTrends } from "./components/SeasonTrends";
 import { WanmeiLogin } from "./components/WanmeiLogin";
 import { MatchDetailModal } from "./components/MatchDetailModal";
 import { LearnPage } from "./components/LearnPage";
+import { LoginPage } from "./components/LoginPage";
 import type { MatchDetail, MatchSummary, Profile, TaskItem } from "./types";
 
 const { Header, Content } = Layout;
 const { Title } = Typography;
+
+// 当前登录用户（GET /auth/me；401 事件切回登录页）
+interface Me {
+  username: string;
+  display_name: string | null;
+  is_admin: boolean;
+}
+
+// ---------- 登录门卫：未登录渲染 LoginPage，登录后渲染业务 Tabs ----------
+function AuthGate() {
+  const [me, setMe] = useState<Me | null>(null);
+  const [checked, setChecked] = useState(false);
+  const qc = useQueryClient();
+
+  useEffect(() => {
+    apiGet<Me>("/auth/me")
+      .then(setMe)
+      .catch(() => setMe(null))
+      .finally(() => setChecked(true));
+    const onUnauthorized = () => {
+      setMe(null);
+      qc.clear();
+    };
+    window.addEventListener("cs2hq:unauthorized", onUnauthorized);
+    return () => window.removeEventListener("cs2hq:unauthorized", onUnauthorized);
+  }, [qc]);
+
+  if (!checked) return null;
+  if (!me) return <LoginPage onSuccess={setMe} />;
+
+  const logout = async () => {
+    try {
+      await apiPost("/auth/logout");
+    } finally {
+      setMe(null);
+      qc.clear();
+    }
+  };
+
+  return (
+    <Layout style={{ minHeight: "100vh" }}>
+      <Header style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <Title level={3} style={{ color: "#fff", lineHeight: "48px", margin: 0 }}>
+          CS2HQ · 专属 CS2 提升平台
+        </Title>
+        <Dropdown
+          menu={{
+            items: [{ key: "logout", label: "退出登录", onClick: logout }],
+          }}
+        >
+          <Button type="text" style={{ color: "#fff" }}>
+            {me.display_name || me.username}
+            {me.is_admin ? "（管理员）" : ""} ▾
+          </Button>
+        </Dropdown>
+      </Header>
+      <Content style={{ padding: 24 }}>
+        <Tabs
+          items={[
+            { key: "overview", label: "总览", children: <OverviewPage /> },
+            { key: "matches", label: "对局", children: <MatchesPage /> },
+            { key: "trends", label: "趋势", children: <LongTermTrends /> },
+            { key: "learn", label: "学道具", children: <LearnPage /> },
+            { key: "chat", label: "AI 教练", children: <CoachChat /> },
+            { key: "tasks", label: "任务", children: <TasksPage /> },
+            { key: "settings", label: "设置", children: <SettingsPage /> },
+          ]}
+        />
+      </Content>
+    </Layout>
+  );
+}
 
 // ---------- 总览 ----------
 function OverviewPage() {
@@ -347,26 +421,5 @@ function SettingsPage() {
 
 // ---------- App ----------
 export default function App() {
-  return (
-    <Layout style={{ minHeight: "100vh" }}>
-      <Header>
-        <Title level={3} style={{ color: "#fff", lineHeight: "48px", margin: 0 }}>
-          CS2HQ · 专属 CS2 提升平台
-        </Title>
-      </Header>
-      <Content style={{ padding: 24 }}>
-        <Tabs
-          items={[
-            { key: "overview", label: "总览", children: <OverviewPage /> },
-            { key: "matches", label: "对局", children: <MatchesPage /> },
-            { key: "trends", label: "趋势", children: <LongTermTrends /> },
-            { key: "learn", label: "学道具", children: <LearnPage /> },
-            { key: "chat", label: "AI 教练", children: <CoachChat /> },
-            { key: "tasks", label: "任务", children: <TasksPage /> },
-            { key: "settings", label: "设置", children: <SettingsPage /> },
-          ]}
-        />
-      </Content>
-    </Layout>
-  );
+  return <AuthGate />;
 }

@@ -3,10 +3,25 @@
 const BASE = import.meta.env.BASE_URL || "/";
 const API = BASE.endsWith("/") ? `${BASE}api` : `${BASE}/api`;
 
+// 401 统一处理：任意 API 返回 401（登录失效）时派发全局事件，
+// App 层监听并切回登录页（账号体系 Phase 2）。
+function handleUnauthorized() {
+  window.dispatchEvent(new CustomEvent("cs2hq:unauthorized"));
+}
+
+async function check(resp: Response, method: string, path: string): Promise<Response> {
+  if (resp.status === 401) {
+    handleUnauthorized();
+    throw new Error(`${method} ${path}: HTTP 401`);
+  }
+  if (!resp.ok) throw new Error(`${method} ${path}: HTTP ${resp.status}`);
+  return resp;
+}
+
 // 极薄 API 封装：统一 /api 前缀与错误抛出
 export async function apiGet<T>(path: string): Promise<T> {
   const resp = await fetch(`${API}${path}`);
-  if (!resp.ok) throw new Error(`GET ${path}: HTTP ${resp.status}`);
+  await check(resp, "GET", path);
   return resp.json();
 }
 
@@ -16,7 +31,7 @@ export async function apiPut<T>(path: string, body: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!resp.ok) throw new Error(`PUT ${path}: HTTP ${resp.status}`);
+  await check(resp, "PUT", path);
   return resp.json();
 }
 
@@ -26,13 +41,13 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  if (!resp.ok) throw new Error(`POST ${path}: HTTP ${resp.status}`);
+  await check(resp, "POST", path);
   return resp.json();
 }
 
 export async function apiDelete<T>(path: string): Promise<T> {
   const resp = await fetch(`${API}${path}`, { method: "DELETE" });
-  if (!resp.ok) throw new Error(`DELETE ${path}: HTTP ${resp.status}`);
+  await check(resp, "DELETE", path);
   return resp.json();
 }
 
@@ -42,7 +57,7 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!resp.ok) throw new Error(`PATCH ${path}: HTTP ${resp.status}`);
+  await check(resp, "PATCH", path);
   return resp.json();
 }
 
@@ -54,6 +69,6 @@ export async function apiUpload<T>(path: string, files: File[], extra?: Record<s
   }
   for (const f of files) form.append("files", f);
   const resp = await fetch(`${API}${path}`, { method: "POST", body: form });
-  if (!resp.ok) throw new Error(`POST ${path}: HTTP ${resp.status}`);
+  await check(resp, "POST", path);
   return resp.json();
 }
