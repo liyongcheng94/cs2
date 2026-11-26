@@ -337,23 +337,36 @@ def analyze_pistol_rounds(kills, rounds, steam_id: int):
     from ..schemas.analysis import PistolRound, PistolRoundsDim
 
     kd = kills.to_dicts()
-    half_side: dict[int, str | None] = {}
-    for r in kd:
-        rn = r.get("total_rounds_played") or 0
-        if rn not in (0,):
-            half = 1 if rn <= 12 else 2
-            for a, u in (("attacker_steamid", "attacker_side"), ("victim_steamid", "victim_side")):
-                if r.get(a) == steam_id and r.get(u):
-                    half_side.setdefault(half, normalize_side(r.get(u)))
     rnd = rounds.to_dicts()
+    # awpy kills 无 round 列 → 用 tick 落在哪个回合区间归属；半场按回合号分
+    def _round_of_tick(tick: float | None) -> int | None:
+        if tick is None:
+            return None
+        for r in rnd:
+            if (r.get("start_tick") or 0) <= tick <= (r.get("end_tick") or 0):
+                return r.get("round_num")
+        return None
+
+    half_side: dict[int, Counter] = {1: Counter(), 2: Counter()}
+    for r in kd:
+        rn = _round_of_tick(r.get("tick"))
+        if rn is None:
+            continue
+        half = 1 if rn <= 12 else 2
+        for a, u in (("attacker_steamid", "attacker_side"), ("victim_steamid", "victim_side")):
+            if r.get(a) == steam_id and r.get(u):
+                s = normalize_side(r.get(u))
+                if s:
+                    half_side[half][s] += 1
+    sides = {h: (c.most_common(1)[0][0] if c else None) for h, c in half_side.items()}
     out = []
     for pr_no in (1, 13):
         wrow = next((r for r in rnd if r.get("round_num") == pr_no), None)
         winner = normalize_side((wrow or {}).get("winner_side"))
-        my_side = half_side.get(1 if pr_no <= 12 else 2)
+        my_side = sides.get(1 if pr_no <= 12 else 2)
         won = (winner == my_side) if (winner and my_side) else None
-        my_kills = sum(1 for r in kd if (r.get("total_rounds_played") == pr_no) and r.get("attacker_steamid") == steam_id)
-        my_deaths = sum(1 for r in kd if (r.get("total_rounds_played") == pr_no) and r.get("victim_steamid") == steam_id)
+        my_kills = sum(1 for r in kd if (_round_of_tick(r.get("tick")) == pr_no) and r.get("attacker_steamid") == steam_id)
+        my_deaths = sum(1 for r in kd if (_round_of_tick(r.get("tick")) == pr_no) and r.get("victim_steamid") == steam_id)
         out.append(PistolRound(round_no=pr_no, my_side=my_side, won=won, my_kills=my_kills, my_deaths=my_deaths))
     t = [x for x in out if x.my_side == "T"]
     ct = [x for x in out if x.my_side == "CT"]

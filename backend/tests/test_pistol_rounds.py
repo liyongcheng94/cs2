@@ -24,6 +24,7 @@ def _kills_df(rows: list[dict]) -> pl.DataFrame:
             "attacker_side": pl.String,
             "victim_side": pl.String,
             "total_rounds_played": pl.UInt32,
+            "tick": pl.Int64,
         },
     )
 
@@ -31,7 +32,7 @@ def _kills_df(rows: list[dict]) -> pl.DataFrame:
 def _rounds_df(rows: list[dict]) -> pl.DataFrame:
     return pl.DataFrame(
         rows,
-        schema={"round_num": pl.UInt32, "winner_side": pl.String},
+        schema={"round_num": pl.UInt32, "winner_side": pl.String, "start_tick": pl.Int64, "end_tick": pl.Int64},
     )
 
 
@@ -41,9 +42,9 @@ ME = 76561198339750836
 def _sample_rounds() -> pl.DataFrame:
     return _rounds_df(
         [
-            {"round_num": 1, "winner_side": "counter-terrorist"},
-            {"round_num": 2, "winner_side": "terrorist"},
-            {"round_num": 13, "winner_side": "terrorist"},
+            {"round_num": 1, "winner_side": "counter-terrorist", "start_tick": 0, "end_tick": 10000},
+            {"round_num": 2, "winner_side": "terrorist", "start_tick": 10000, "end_tick": 20000},
+            {"round_num": 13, "winner_side": "terrorist", "start_tick": 60000, "end_tick": 70000},
         ]
     )
 
@@ -63,14 +64,14 @@ def test_pistol_rounds_detection_and_personal_kd():
     kills = _kills_df(
         [
             # R1：我方 T，我 1 杀 1 死，回 合 CT 胜
-            {"attacker_steamid": ME, "victim_steamid": 2, "attacker_side": "terrorist", "victim_side": "counter-terrorist", "total_rounds_played": 1},
-            {"attacker_steamid": 2, "victim_steamid": ME, "attacker_side": "counter-terrorist", "victim_side": "terrorist", "total_rounds_played": 1},
+            {"attacker_steamid": ME, "victim_steamid": 2, "attacker_side": "terrorist", "victim_side": "counter-terrorist", "total_rounds_played": 1, "tick": 3000},
+            {"attacker_steamid": 2, "victim_steamid": ME, "attacker_side": "counter-terrorist", "victim_side": "terrorist", "total_rounds_played": 1, "tick": 3000},
             # R2（非手枪局，不统计）
-            {"attacker_steamid": ME, "victim_steamid": 3, "attacker_side": "terrorist", "victim_side": "counter-terrorist", "total_rounds_played": 2},
+            {"attacker_steamid": ME, "victim_steamid": 3, "attacker_side": "terrorist", "victim_side": "counter-terrorist", "total_rounds_played": 2, "tick": 12000},
             # R13：我方 CT，我 2 杀 0 死，回合 T 胜（我方负）
-            {"attacker_steamid": ME, "victim_steamid": 4, "attacker_side": "counter-terrorist", "victim_side": "terrorist", "total_rounds_played": 13},
-            {"attacker_steamid": ME, "victim_steamid": 5, "attacker_side": "counter-terrorist", "victim_side": "terrorist", "total_rounds_played": 13},
-            {"attacker_steamid": 4, "victim_steamid": 6, "attacker_side": "terrorist", "victim_side": "counter-terrorist", "total_rounds_played": 13},
+            {"attacker_steamid": ME, "victim_steamid": 4, "attacker_side": "counter-terrorist", "victim_side": "terrorist", "total_rounds_played": 13, "tick": 68000},
+            {"attacker_steamid": ME, "victim_steamid": 5, "attacker_side": "counter-terrorist", "victim_side": "terrorist", "total_rounds_played": 13, "tick": 68000},
+            {"attacker_steamid": 4, "victim_steamid": 6, "attacker_side": "terrorist", "victim_side": "counter-terrorist", "total_rounds_played": 13, "tick": 68000},
         ]
     )
     dim = analyze_pistol_rounds(kills, _sample_rounds(), ME)
@@ -88,9 +89,9 @@ def test_side_inferred_from_half_mode():
     kills = _kills_df(
         [
             # R1 我没有任何参与行；R2-R4 我方 T
-            {"attacker_steamid": ME, "victim_steamid": 2, "attacker_side": "terrorist", "victim_side": "counter-terrorist", "total_rounds_played": 2},
-            {"attacker_steamid": ME, "victim_steamid": 3, "attacker_side": "terrorist", "victim_side": "counter-terrorist", "total_rounds_played": 3},
-            {"attacker_steamid": 2, "victim_steamid": ME, "attacker_side": "counter-terrorist", "victim_side": "terrorist", "total_rounds_played": 4},
+            {"attacker_steamid": ME, "victim_steamid": 2, "attacker_side": "terrorist", "victim_side": "counter-terrorist", "total_rounds_played": 2, "tick": 12000},
+            {"attacker_steamid": ME, "victim_steamid": 3, "attacker_side": "terrorist", "victim_side": "counter-terrorist", "total_rounds_played": 3, "tick": 15000},
+            {"attacker_steamid": 2, "victim_steamid": ME, "attacker_side": "counter-terrorist", "victim_side": "terrorist", "total_rounds_played": 4, "tick": 19000},
         ]
     )
     dim = analyze_pistol_rounds(kills, _sample_rounds(), ME)
@@ -105,7 +106,7 @@ def test_no_participation_whole_half_excluded():
     kills = _kills_df(
         [
             # 只有 R13 我方 CT 的一行（下半场），上半场无任何我的行
-            {"attacker_steamid": ME, "victim_steamid": 2, "attacker_side": "counter-terrorist", "victim_side": "terrorist", "total_rounds_played": 13},
+            {"attacker_steamid": ME, "victim_steamid": 2, "attacker_side": "counter-terrorist", "victim_side": "terrorist", "total_rounds_played": 13, "tick": 68000},
         ]
     )
     dim = analyze_pistol_rounds(kills, _sample_rounds(), ME)
