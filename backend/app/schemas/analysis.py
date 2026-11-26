@@ -165,6 +165,16 @@ class PistolRoundsDim(BaseModel):
     total: int = 0
 
 
+class GridCell(BaseModel):
+    """定位分析网格单元（3×3 归一化，与地图 callout 解耦）。"""
+    grid_row: int  # 0..2（y 轴行）
+    grid_col: int  # 0..2（x 轴列）
+    kills: int = 0
+    deaths: int = 0
+    win_rate: float | None = None  # 对枪胜率 kills/(kills+deaths)
+    label: str = "均衡"  # 优势 / 劣势 / 均衡（n<3 一律均衡）
+
+
 class FourDimAnalysis(BaseModel):
     schema_version: str = SCHEMA_VERSION
     match_id: str
@@ -174,6 +184,7 @@ class FourDimAnalysis(BaseModel):
     duels: DuelDim = Field(default_factory=DuelDim)
     highlights: list[HighlightMoment] = Field(default_factory=list)  # 1.1：TopN 可看性时刻
     pistol_rounds: PistolRoundsDim | None = None  # 1.4：手枪局维度（第 1/13 回合）
+    positions: list[GridCell] = Field(default_factory=list)  # Phase 3：3×3 定位网格
     server_ratings: ServerRatings | None = None  # 六维能力评分（demo_analyze 拉到 v1 数据后回填）
     meta: AnalysisMeta = Field(
         default_factory=lambda: AnalysisMeta(parser="unknown")

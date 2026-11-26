@@ -648,6 +648,9 @@ def run_analysis(dem_path, match_id: str, steam_id: str) -> tuple[FourDimAnalysi
         utility_dim.spots = collect_utility_spots(demo, sid, user_side)
         highlights = detect_highlights(kills, rounds, sid, user_side)
         pistol_dim = analyze_pistol_rounds(kills, rounds, sid)
+        from .position_analysis import analyze_positions
+
+        position_cells = analyze_positions(kills, sid)
 
         analysis = FourDimAnalysis(
             match_id=match_id,
@@ -657,6 +660,7 @@ def run_analysis(dem_path, match_id: str, steam_id: str) -> tuple[FourDimAnalysi
             duels=duels_dim,
             highlights=highlights,
             pistol_rounds=pistol_dim,
+            positions=position_cells,
             meta=AnalysisMeta(parser="awpy 3.3.0"),
         )
     finally:

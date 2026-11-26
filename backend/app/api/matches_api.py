@@ -1,3 +1,4 @@
+import json
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -100,6 +101,73 @@ def list_matches(session: SessionDep, user: CurrentUser) -> list[dict]:
         }
         for m in session.exec(stmt).all()
     ]
+
+
+@router.get("/go-report")
+def go_report(n: int = 10, session: SessionDep = None, user: CurrentUser = None) -> dict:
+    """GO指导定位报告：最近 n 场六维（官方评分）mine vs 房均 + 3×3 位置网格跨场合并。
+
+    数据源：demoanalysis.payload（server_ratings 在 utility.server_ratings.players；
+    positions 为 Phase 3 新增字段，旧 payload 无此字段时跳过位置合并）。
+    """
+    from ..services import settings_service
+
+    stmt = (
+        select(Match, DemoAnalysis)
+        .join(DemoAnalysis, DemoAnalysis.match_id == Match.match_id)
+        .order_by(Match.played_at.desc())
+        .limit(max(1, min(n, 50)))
+    )
+    rows = session.exec(_scoped(stmt, user)).all()
+    steam_id = settings_service.get_value(session, "wanmei.steam_id") or ""
+
+    dims = ["瞄准能力", "补枪能力", "突破能力", "道具能力", "残局能力", "火力值"]
+    mine_acc: dict[str, list[float]] = {}
+    room_acc: dict[str, list[float]] = {}
+    cell_acc: dict[tuple[int, int], dict] = {}
+    analyzed = 0
+    for match, da in rows:
+        payload = da.payload if not isinstance(da.payload, str) else json.loads(da.payload)
+        ratings = (payload.get("utility") or {}).get("server_ratings") or {}
+        players = ratings.get("players") or {}
+        me = players.get(str(steam_id))
+        if not me:
+            continue
+        analyzed += 1
+        for d in dims:
+            v = me.get(d)
+            if v is not None:
+                mine_acc.setdefault(d, []).append(float(v))
+        for p in players.values():
+            for d in dims:
+                v = p.get(d)
+                if v is not None:
+                    room_acc.setdefault(d, []).append(float(v))
+        for c in payload.get("positions") or []:
+            k = (c["grid_row"], c["grid_col"])
+            acc = cell_acc.setdefault(k, {"kills": 0, "deaths": 0})
+            acc["kills"] += c.get("kills", 0)
+            acc["deaths"] += c.get("deaths", 0)
+
+    five_dim = {}
+    for d in dims:
+        five_dim[d] = {
+            "mine": round(sum(mine_acc[d]) / len(mine_acc[d]), 1) if mine_acc.get(d) else None,
+            "room_avg": round(sum(room_acc[d]) / len(room_acc[d]), 1) if room_acc.get(d) else None,
+        }
+    positions = []
+    for (r, c), v in sorted(cell_acc.items()):
+        total = v["kills"] + v["deaths"]
+        wr = v["kills"] / total if total else None
+        if total >= 3 and wr is not None and wr >= 0.6:
+            label = "优势"
+        elif total >= 3 and wr is not None and wr <= 0.4:
+            label = "劣势"
+        else:
+            label = "均衡"
+        positions.append({"grid_row": r, "grid_col": c, "kills": v["kills"], "deaths": v["deaths"],
+                          "win_rate": round(wr, 3) if wr is not None else None, "label": label})
+    return {"five_dim": five_dim, "positions": positions, "matches_analyzed": analyzed}
 
 
 @router.get("/{match_id}")
