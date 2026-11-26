@@ -57,6 +57,9 @@ async def _ai_review(analysis: FourDimAnalysis, ai: AiClient, focus: str | None)
         "你是 CS2 复盘教练。只输出 JSON（ReviewOutput 结构）："
         '{"match_id":str,"mistakes":[{"title","evidence","severity":"high|mid|low"}],"highlights":[str],'
         '"today_focus":str,"tomorrow":[str]}。'
+        "pistol_rounds 字段是第 1/13 回合手枪局结果（MR12，全队起手枪）：my_side/won 分回合、t_*/ct_* 分阵营聚合。"
+        "T 方手枪局连败时必须作为失误候选（团队执行问题，不是个人枪法）；evidence 引用具体回合的 my_side/won 取值。"
+        "口径注意：utility.waste_rate 是「闪光效率浪费」（扔了没致盲人≥0.5s），不要与道具买而不扔（usage[].waste_rate）混用。"
         "防幻觉铁律：每条失误的 evidence 必须引用我给你的 JSON 数据里的具体字段与取值；"
         "没有数据支撑就宁可输出空 mistakes（'无明显失误'），严禁臆造因果。"
         "today_focus 从 top3 里只选一个最影响胜率的问题，输出一句具体行动指令。"
