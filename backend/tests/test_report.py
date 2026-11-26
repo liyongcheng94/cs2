@@ -52,7 +52,7 @@ def test_rule_based_focus_hard_redline_first():
     Then  今日唯一重点 = 近战急停（Rule-based 优先，AI 不自由发挥）
     """
     focus = rule_based_focus(
-        _analysis(duels={"by_weapon_distance": [{"distance": "0-5m", "weapon": "AK-47", "win_rate": 0.22}]})
+        _analysis(duels={"by_weapon_distance": [{"distance": "0-5m", "weapon": "AK-47", "kills": 2, "deaths": 9, "win_rate": 0.22}]})
     )
     assert focus is not None and "近战" in focus and "急停" in focus
 
@@ -182,3 +182,38 @@ def test_ai_review_prompt_carries_waste_rate_glossary():
     assert "闪光效率浪费" in src
     assert "买而不扔" in src
     assert "usage[].waste_rate" in src
+
+
+def test_near_range_redline_ignores_low_sample_cells():
+    """
+    Given 数据审计（2026-11-26）确认单场矩阵格子样本常为 1（0/1→0% 属统计噪音）
+    When rule_based_focus 检查 0-5m 对枪红线
+    Then 样本 <3 的格子不触发硬红线；样本 ≥3 且 <30% 才触发
+    """
+    from app.schemas.analysis import DuelBucket, DuelDim, FourDimAnalysis
+    from app.services import report as rp
+
+    def _analysis(buckets):
+        a = FourDimAnalysis(match_id="M")
+        a.duels = DuelDim(by_weapon_distance=buckets)
+        return a
+
+    low = DuelBucket(distance="0-5m", weapon="smg", kills=0, deaths=1, win_rate=0.0)
+    assert rp.rule_based_focus(_analysis([low])) is None  # 0/1 不触发
+
+    solid = DuelBucket(distance="0-5m", weapon="smg", kills=1, deaths=9, win_rate=0.1)
+    assert rp.rule_based_focus(_analysis([solid])) is not None  # 1/10 触发
+
+
+def test_ai_review_prompt_carries_low_sample_guard():
+    """
+    Given AI 曾把 0/1 的 0% 列为 high 级失误（统计噪音误读）
+    When _ai_review 组装 prompt
+    Then prompt 必须声明样本 <3 的矩阵格子不作证据
+    """
+    import inspect
+
+    from app.services import report as rp
+
+    src = inspect.getsource(rp._ai_review)
+    assert "样本" in src and "不足以下结论" in src

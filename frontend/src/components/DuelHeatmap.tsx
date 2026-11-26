@@ -37,7 +37,10 @@ export function DuelHeatmap({ analysis }: { analysis: FourDimAnalysisShape | nul
     cells.forEach((c) => {
       const x = BUCKETS.indexOf(c.distance);
       const y = weapons.indexOf(c.weapon);
-      if (x >= 0 && y >= 0) data.push([x, y, c.win_rate ?? null]);
+      if (x < 0 || y < 0) return;
+      // 样本<3（如 0/1 的 0%、1/1 的 100% 属统计噪音）：值置 null 不进红绿色域，tooltip 仍展示计数
+      const n = (c.kills ?? 0) + (c.deaths ?? 0);
+      data.push([x, y, n < 3 ? null : (c.win_rate ?? null)]);
     });
 
     chart.setOption({
@@ -48,7 +51,12 @@ export function DuelHeatmap({ analysis }: { analysis: FourDimAnalysisShape | nul
             (c) => BUCKETS.indexOf(c.distance) === p.data[0] && weapons.indexOf(c.weapon) === p.data[1],
           );
           const wr = p.data[2] == null ? "无数据" : `${(p.data[2] * 100).toFixed(0)}%`;
-          return `${cell?.weapon ?? ""} @ ${BUCKETS[p.data[0]]}<br/>击杀 ${cell?.kills ?? 0} / 死亡 ${cell?.deaths ?? 0}<br/>胜率 ${wr}`;
+          const n = (cell?.kills ?? 0) + (cell?.deaths ?? 0);
+          const tag =
+            n > 0 && n < 3
+              ? '<br/><span style="color:#bbb">⚠ 样本仅 ' + n + "——不足以下结论</span>"
+              : "";
+          return `${cell?.weapon ?? ""} @ ${BUCKETS[p.data[0]]}<br/>击杀 ${cell?.kills ?? 0} / 死亡 ${cell?.deaths ?? 0}<br/>胜率 ${wr}${tag}`;
         },
       },
       grid: { left: 80, right: 20, top: 40, bottom: 30 },

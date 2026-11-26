@@ -29,7 +29,9 @@ def compute_source_hash(match_id: str, prompt_version: str) -> str:
 def rule_based_focus(analysis: FourDimAnalysis) -> str | None:
     """硬红线优先：命中即返回固定行动指令；无红线返回 None（交 AI 在证据链内选择）。"""
     for b in analysis.duels.by_weapon_distance:
-        if b.distance == "0-5m" and b.win_rate is not None and b.win_rate < NEAR_RANGE_REDLINE:
+        # 样本 <3 的格子（0/1→0%）属统计噪音，不触发硬红线
+        n = (b.kills or 0) + (b.deaths or 0)
+        if b.distance == "0-5m" and b.win_rate is not None and n >= 3 and b.win_rate < NEAR_RANGE_REDLINE:
             return "近战急停：aim_botz 移动急停开枪 10 分钟，只打两发就停"
     if analysis.economy.full_buy_lose_rate is not None and analysis.economy.full_buy_lose_rate > FULL_BUY_LOSE_REDLINE:
         return "资源转化：满编局打不出优势——复盘每个满编回合的首个交火点，避免单人无信息探点"
@@ -59,7 +61,7 @@ async def _ai_review(analysis: FourDimAnalysis, ai: AiClient, focus: str | None)
         '"today_focus":str,"tomorrow":[str]}。'
         "pistol_rounds 字段是第 1/13 回合手枪局结果（MR12，全队起手枪）：my_side/won 分回合、t_*/ct_* 分阵营聚合。"
         "T 方手枪局连败时必须作为失误候选（团队执行问题，不是个人枪法）；evidence 引用具体回合的 my_side/won 取值。"
-        "口径注意：utility.waste_rate 是「闪光效率浪费」（扔了没致盲人≥0.5s），不要与道具买而不扔（usage[].waste_rate）混用。"
+        "口径注意：utility.waste_rate 是「闪光效率浪费」（样本<3 的对枪矩阵格子——如 0/1 的 0% 或 1/1 的 100%——是统计噪音，不足以下结论，不得作为失误证据引入（扔了没致盲人≥0.5s），不要与道具买而不扔（usage[].waste_rate）混用。"
         "防幻觉铁律：每条失误的 evidence 必须引用我给你的 JSON 数据里的具体字段与取值；"
         "没有数据支撑就宁可输出空 mistakes（'无明显失误'），严禁臆造因果。"
         "today_focus 从 top3 里只选一个最影响胜率的问题，输出一句具体行动指令。"
