@@ -20,6 +20,7 @@ import {
 } from "antd";
 import { apiGet, apiPost, apiPut } from "./api/client";
 import { LongTermTrends } from "./components/LongTermTrends";
+import { GoReportPage } from "./components/GoReportPage";
 import { CoachChat } from "./components/CoachChat";
 import { SeasonTrends } from "./components/SeasonTrends";
 import { WanmeiLogin } from "./components/WanmeiLogin";
@@ -92,6 +93,7 @@ function AuthGate() {
             { key: "overview", label: "总览", children: <OverviewPage /> },
             { key: "matches", label: "对局", children: <MatchesPage /> },
             { key: "trends", label: "趋势", children: <LongTermTrends /> },
+            { key: "go-report", label: "定位分析", children: <GoReportPage /> },
             { key: "learn", label: "学道具", children: <LearnPage /> },
             { key: "chat", label: "AI 教练", children: <CoachChat /> },
             { key: "tasks", label: "任务", children: <TasksPage /> },
