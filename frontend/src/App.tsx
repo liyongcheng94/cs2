@@ -120,9 +120,7 @@ function OverviewPage() {
 
   return (
     <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-      <Card
-        title="玩家基线画像（来自 DeepSeek 对话还原）"
-      >
+      <Card title={`玩家基线画像${p?.data?.real ? `（最近 ${p.data.recent_matches} 场实时聚合）` : "（暂无对局数据，以下为手动基线）"}`}>
         {p ? (
           <Row gutter={24}>
             <Col span={6}>
@@ -132,16 +130,16 @@ function OverviewPage() {
               <Statistic title="主玩地图" value={p.data.main_map ?? "-"} />
             </Col>
             <Col span={6}>
-              <Statistic title="爆头率" value={((p.data.hs_rate ?? 0) * 100).toFixed(1) + "%"} />
+              <Statistic title="爆头率（近30场均值）" value={p.data.hs_rate != null ? (p.data.hs_rate * 100).toFixed(1) + "%" : "-"} />
             </Col>
             <Col span={6}>
-              <Statistic title="手枪局 WE" value={p.data.pistol_we ?? "-"} />
+              <Statistic title="手枪局胜率" value={p.data.pistol_win_rate != null ? (p.data.pistol_win_rate * 100).toFixed(0) + "%" : "-"} />
             </Col>
             <Col span={24} style={{ marginTop: 16 }}>
               <Space wrap>
                 {Object.entries(p.data.grades ?? {}).map(([k, v]) => (
                   <Tag key={k} color={v === "A" ? "green" : v === "B" ? "blue" : "volcano"}>
-                    {k} {v}
+                    {k} vs 房均 {v}
                   </Tag>
                 ))}
               </Space>

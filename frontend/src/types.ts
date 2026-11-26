@@ -68,6 +68,9 @@ export interface Profile {
     main_map?: string;
     grades?: Record<string, string>;
     pistol_we?: number;
+    pistol_win_rate?: number;
+    recent_matches?: number;
+    real?: boolean;
     t_rating?: number;
     ct_rating?: number;
     hs_rate?: number;
