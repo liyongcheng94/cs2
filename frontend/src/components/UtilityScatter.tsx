@@ -49,8 +49,7 @@ export function UtilityScatter({ analysis, mapEn }: { analysis: FourDimAnalysisS
       });
 
       chart.setOption({
-        title: { text: "道具落点（烟雾/燃烧/致盲）", left: "center", textStyle: { fontSize: 13, color: "#ccc" } },
-        legend: { bottom: 0, textStyle: { color: "#ccc", fontSize: 11 } },
+                legend: { bottom: 0, textStyle: { color: "#ccc", fontSize: 11 } },
         xAxis: { type: "value", min: 0, max: meta.width, show: false },
         yAxis: { type: "value", min: 0, max: meta.height, show: false, inverse: true },
         graphic: [
@@ -90,5 +89,10 @@ export function UtilityScatter({ analysis, mapEn }: { analysis: FourDimAnalysisS
   if (!spots.length) {
     return <div style={{ color: "#999", fontSize: 12 }}>道具落点需含坐标的解析结果（重新分析后生成）</div>;
   }
-  return <div ref={ref} style={{ width: "100%", height: 340 }} />;
+  return (
+    <div>
+      <div style={{ textAlign: "center", fontSize: 13, color: "#ccc", marginBottom: 4 }}>道具落点（烟雾/燃烧/致盲）</div>
+      <div ref={ref} style={{ width: "100%", height: 340 }} />
+    </div>
+  );
 }

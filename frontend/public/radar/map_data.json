@@ -1,24 +1,24 @@
 {
  "de_mirage": {
-  "pos_x": -3230.0,
-  "pos_y": 1713.0,
+  "pos_x": -2875.0,
+  "pos_y": 1273.0,
   "scale": 5.0,
-  "width": 1024,
-  "height": 1024
+  "width": 926,
+  "height": 858
  },
  "de_dust2": {
-  "pos_x": -2476.0,
-  "pos_y": 3239.0,
+  "pos_x": -2269.2,
+  "pos_y": 3208.2,
   "scale": 4.4,
-  "width": 1024,
-  "height": 1024
+  "width": 934,
+  "height": 1005
  },
  "de_inferno": {
-  "pos_x": -2087.0,
-  "pos_y": 3870.0,
+  "pos_x": -1778.3,
+  "pos_y": 3580.9,
   "scale": 4.9,
-  "width": 1024,
-  "height": 1024
+  "width": 916,
+  "height": 897
  },
  "de_nuke": {
   "pos_x": -3453.0,
@@ -28,24 +28,24 @@
   "height": 1024
  },
  "de_ancient": {
-  "pos_x": -2953.0,
-  "pos_y": 2164.0,
+  "pos_x": -2353.0,
+  "pos_y": 1814.0,
   "scale": 5.0,
-  "width": 1024,
-  "height": 1024
+  "width": 760,
+  "height": 874
  },
  "de_anubis": {
-  "pos_x": -2796.0,
-  "pos_y": 3328.0,
+  "pos_x": -2039.1,
+  "pos_y": 3223.6,
   "scale": 5.22,
-  "width": 1024,
-  "height": 1024
+  "width": 748,
+  "height": 973
  },
  "de_vertigo": {
-  "pos_x": -3168.0,
-  "pos_y": 1762.0,
+  "pos_x": -2684.0,
+  "pos_y": 1210.0,
   "scale": 4.0,
-  "width": 1024,
-  "height": 1024
+  "width": 704,
+  "height": 734
  }
 }

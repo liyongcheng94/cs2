@@ -66,8 +66,7 @@ export function DeathScatter({ analysis, mapEn }: { analysis: FourDimAnalysisSha
       });
 
       chart.setOption({
-        title: { text: "死亡位置（雷达底图）", left: "center", textStyle: { fontSize: 13, color: "#ccc" } },
-        tooltip: { show: false },
+                tooltip: { show: false },
         xAxis: { type: "value", min: 0, max: meta.width, show: false },
         yAxis: { type: "value", min: 0, max: meta.height, show: false, inverse: true },
         graphic: [
@@ -109,5 +108,10 @@ export function DeathScatter({ analysis, mapEn }: { analysis: FourDimAnalysisSha
   if (!events.some((e) => (e as Record<string, number>).victim_x != null)) {
     return <div style={{ color: "#999", fontSize: 12 }}>死亡散点需含坐标的解析结果（重新分析后生成）</div>;
   }
-  return <div ref={ref} style={{ width: "100%", height: 340 }} />;
+  return (
+    <div>
+      <div style={{ textAlign: "center", fontSize: 13, color: "#ccc", marginBottom: 4 }}>死亡位置（雷达底图）</div>
+      <div ref={ref} style={{ width: "100%", height: 340 }} />
+    </div>
+  );
 }
