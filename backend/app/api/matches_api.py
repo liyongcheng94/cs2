@@ -235,3 +235,30 @@ def match_report_md(match_id: int, session: SessionDep, user: CurrentUser) -> di
     if report is None:
         raise HTTPException(status_code=404, detail="尚未生成复盘")
     return {"title": report.title, "content_md": report.content_md, "degraded": report.degraded, "pushed": report.pushed}
+
+
+@router.get("/{match_id}/perfect")
+def match_perfect(match_id: int, side: str = "ALL", session: SessionDep = None, user: CurrentUser = None) -> dict:
+    """完美风格完整对局分析（side=ALL/T/CT）。"""
+    import os
+
+    from ..schemas.perfect import PerfectAnalysis
+    from ..services.demo_events import extract_perfect_events
+    from ..services.perfect_analysis import analyze_perfect
+    from ..services.settings_service import get_value
+
+    if side not in ("ALL", "T", "CT"):
+        raise HTTPException(400, "side 必须是 ALL/T/CT")
+    m = session.get(Match, match_id)
+    if not m or not session.exec(_scoped(select(Match).where(Match.id == match_id), user)).first():
+        raise HTTPException(404, "对局不存在")
+    if m.demo_status not in ("downloaded", "analyzed"):
+        raise HTTPException(409, f"demo 不可用（{m.demo_status}），请先下载")
+    num = str(m.match_id).split("@")[-1]
+    demo_path = os.path.join(os.environ.get("CS2HQ_DATA_DIR", "data"), "demos", f"{num}_0.dem")
+    if not os.path.exists(demo_path):
+        raise HTTPException(409, "demo 文件缺失，请重新下载")
+    steam_id = get_value(session, "wanmei.steam_id")
+    events = extract_perfect_events(demo_path, steam_id)
+    res = analyze_perfect(events, steam_id, side=side)
+    return res.model_dump()
