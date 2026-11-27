@@ -6,6 +6,8 @@ export interface MatchSummary {
   map_name: string;
   score1: number;
   score2: number;
+  my_score: number;
+  opponent_score: number;
   win: boolean;
   draw?: boolean;
   map_en?: string;

@@ -128,7 +128,7 @@ function Inner({ detail }: { detail: MatchDetail }) {
       <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 8 }}>
         {resultTag(m)}
         <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: 2 }}>
-          {m.score1} - {m.score2}
+          {m.my_score ?? m.score1} - {m.opponent_score ?? m.score2}
         </span>
         <div style={{ display: "flex", flexDirection: "column", fontSize: 12 }}>
           <span>{m.mode || "对局"}</span>
@@ -136,7 +136,7 @@ function Inner({ detail }: { detail: MatchDetail }) {
         </div>
         <div style={{ marginLeft: "auto", textAlign: "right", fontSize: 12 }}>
           <Text type="secondary">
-            {m.played_at ? new Date(m.played_at + "Z").toLocaleString() : ""} · 比赛ID {m.match_id.replace("PVP@", "")}
+            {m.played_at ? new Date(m.played_at).toLocaleString() : ""} · 比赛ID {m.match_id.replace("PVP@", "")}
           </Text>
           <div>
             <span style={{ color: "#999" }}>demo: </span>

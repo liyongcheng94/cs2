@@ -202,7 +202,7 @@ function MatchesPage() {
     {
       title: "比分",
       key: "score",
-      render: (_: unknown, r: MatchSummary) => `${r.score1} : ${r.score2}`,
+      render: (_: unknown, r: MatchSummary) => `${r.my_score ?? r.score1} : ${r.opponent_score ?? r.score2}`,
     },
     {
       title: "胜负",
@@ -221,7 +221,7 @@ function MatchesPage() {
       title: "时间",
       dataIndex: "played_at",
       key: "played_at",
-      render: (t: string | null) => (t ? new Date(t + "Z").toLocaleString() : "-"),
+      render: (t: string | null) => (t ? new Date(t).toLocaleString() : "-"), // played_at 存的是本地时间裸串，不能当 UTC
     },
     {
       title: "操作",

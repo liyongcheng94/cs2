@@ -85,6 +85,17 @@ def stats_trends(session: SessionDep, user: CurrentUser) -> dict:
 @router.get("")
 def list_matches(session: SessionDep, user: CurrentUser) -> list[dict]:
     stmt = _scoped(select(Match).order_by(Match.played_at.desc()), user)
+
+    def _scores(m: Match) -> tuple[int, int]:
+        """（我方分, 敌方分）：score1/score2 是队1/队2 的分，我方队伍号在 raw.team；
+        legacy 无 team 时用 win+比分推断。"""
+        team = (m.raw or {}).get("team")
+        if team in (1, "1"):
+            return m.score1, m.score2
+        if team in (2, "2"):
+            return m.score2, m.score1
+        return (m.score2, m.score1) if m.win == (m.score2 > m.score1) else (m.score1, m.score2)
+
     return [
         {
             "id": m.id,
@@ -92,6 +103,8 @@ def list_matches(session: SessionDep, user: CurrentUser) -> list[dict]:
             "map_name": m.map_name,
             "score1": m.score1,
             "score2": m.score2,
+            "my_score": _scores(m)[0],
+            "opponent_score": _scores(m)[1],
             "win": m.win,
             "draw": (m.raw or {}).get("winTeam") == -1,  # 平局口径实测：winTeam=-1（2026-11-23）
             "map_en": MAP_NAME_EN.get(m.map_name, ""),
@@ -187,6 +200,7 @@ def get_match(match_id: int, session: SessionDep, user: CurrentUser) -> dict:
             "map_name": match.map_name,
             "score1": match.score1,
             "score2": match.score2,
+            "draw": (match.raw or {}).get("winTeam") == -1,
             "win": match.win,
             "mode": match.mode,
             "played_at": match.played_at.isoformat() if match.played_at else None,
