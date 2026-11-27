@@ -1,51 +1,85 @@
 {
  "de_mirage": {
-  "pos_x": -2875.0,
-  "pos_y": 1273.0,
+  "pos_x": -3230.0,
+  "pos_y": 1713.0,
+  "rotate": 0.0,
   "scale": 5.0,
-  "width": 926,
-  "height": 858
+  "zoom": 0.0,
+  "width": 1024,
+  "height": 1024
  },
  "de_dust2": {
-  "pos_x": -2269.2,
-  "pos_y": 3208.2,
+  "pos_x": -2476.0,
+  "pos_y": 3239.0,
+  "rotate": 1.0,
   "scale": 4.4,
-  "width": 934,
-  "height": 1005
+  "zoom": 1.1,
+  "width": 1024,
+  "height": 1024
  },
  "de_inferno": {
-  "pos_x": -1778.3,
-  "pos_y": 3580.9,
+  "pos_x": -2087.0,
+  "pos_y": 3870.0,
+  "rotate": null,
   "scale": 4.9,
-  "width": 916,
-  "height": 897
+  "zoom": null,
+  "width": 1024,
+  "height": 1024
  },
  "de_nuke": {
   "pos_x": -3453.0,
   "pos_y": 2887.0,
+  "rotate": null,
   "scale": 7.0,
+  "verticalsections": {
+   "default": {
+    "AltitudeMax": "10000",
+    "AltitudeMin": "-495"
+   },
+   "lower": {
+    "AltitudeMax": "-495",
+    "AltitudeMin": "-10000"
+   }
+  },
+  "zoom": null,
   "width": 1024,
   "height": 1024
  },
  "de_ancient": {
-  "pos_x": -2353.0,
-  "pos_y": 1814.0,
+  "pos_x": -2953.0,
+  "pos_y": 2164.0,
+  "rotate": 0.0,
   "scale": 5.0,
-  "width": 760,
-  "height": 874
+  "zoom": 0.0,
+  "width": 1024,
+  "height": 1024
  },
  "de_anubis": {
-  "pos_x": -2039.1,
-  "pos_y": 3223.6,
+  "pos_x": -2796.0,
+  "pos_y": 3328.0,
+  "rotate": null,
   "scale": 5.22,
-  "width": 748,
-  "height": 973
+  "zoom": null,
+  "width": 1024,
+  "height": 1024
  },
  "de_vertigo": {
-  "pos_x": -2684.0,
-  "pos_y": 1210.0,
+  "pos_x": -3168.0,
+  "pos_y": 1762.0,
+  "rotate": null,
   "scale": 4.0,
-  "width": 704,
-  "height": 734
+  "verticalsections": {
+   "default": {
+    "AltitudeMax": "20000",
+    "AltitudeMin": "11700"
+   },
+   "lower": {
+    "AltitudeMax": "11700",
+    "AltitudeMin": "-10000"
+   }
+  },
+  "zoom": null,
+  "width": 1024,
+  "height": 1024
  }
 }

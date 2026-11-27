@@ -24,9 +24,13 @@ export function UtilityScatter({ analysis, mapEn }: { analysis: FourDimAnalysisS
     (async () => {
       const meta = mapEn ? await loadMapData().then((d) => d[mapEn]) : undefined;
       if (cancelled) return;
-      if (!ref.current) return;
+      if (!ref.current || !meta) return;
+      // 容器高度按雷达纵横比自适应，避免非方形 grid 把地图拉伸/裁切
+      const w = ref.current.clientWidth || 600;
+      ref.current.style.height = Math.round((w * meta.height) / meta.width) + "px";
       if (!chartRef.current) chartRef.current = echarts.init(ref.current);
       const chart = chartRef.current;
+      chart.resize();
 
       if (!meta) {
         chart.clear();
