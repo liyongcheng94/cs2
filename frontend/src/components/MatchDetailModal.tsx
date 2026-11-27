@@ -9,6 +9,7 @@ import type { FourDimAnalysisShape, MatchDetail } from "../types";
 import { DeathScatter } from "./DeathScatter";
 import { UtilityScatter } from "./UtilityScatter";
 import { DuelHeatmap } from "./DuelHeatmap";
+import { PerfectAnalysis } from "./PerfectAnalysis";
 
 const { Text } = Typography;
 
@@ -146,6 +147,7 @@ function Inner({ detail }: { detail: MatchDetail }) {
 
       <Tabs
         items={[
+          { key: "perfect", label: "完整分析", children: <PerfectAnalysis matchId={m.id} /> },
           { key: "overall", label: "综合数据", children: <OverallTab detail={detail} /> },
           { key: "duels", label: "对枪矩阵", children: <DuelHeatmap analysis={detail.analysis} /> },
           { key: "util", label: "道具分析", children: <UtilityTab detail={detail} /> },
