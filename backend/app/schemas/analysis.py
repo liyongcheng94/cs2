@@ -175,9 +175,21 @@ class GridCell(BaseModel):
     label: str = "均衡"  # 优势 / 劣势 / 均衡（n<3 一律均衡）
 
 
+
+
+class RivalRow(BaseModel):
+    """单场宿敌行（跨场聚合前的粒度）。"""
+
+    opponent_id: str
+    opponent_name: str = ""
+    i_killed_them: int = 0
+    they_killed_me: int = 0
+
+
 class FourDimAnalysis(BaseModel):
     schema_version: str = SCHEMA_VERSION
     match_id: str
+    rivals: list[RivalRow] = Field(default_factory=list)  # 单场宿敌行（跨场聚合数据源）
     deaths: DeathDim = Field(default_factory=DeathDim)
     economy: EconomyDim = Field(default_factory=EconomyDim)
     utility: UtilityDim = Field(default_factory=UtilityDim)

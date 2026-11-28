@@ -276,3 +276,33 @@ def test_sync_marks_draw_matches(client, monkeypatch):
     by_id = {m["match_id"]: m for m in matches}
     assert by_id["PVP@DRAW1"]["draw"] is True and by_id["PVP@DRAW1"]["win"] is False
     assert by_id["PVP@WIN2"]["draw"] is False and by_id["PVP@WIN2"]["win"] is True
+
+
+def test_rivals_summary_aggregates_across_matches(client, monkeypatch):
+    """
+    Given 两场已分析对局各含 rivals 行（同一对手出现两次）
+    When  GET /api/matches/rivals
+    Then  跨场累加（他杀我/我杀他/encounters），按总互动排序
+    """
+    from sqlmodel import select
+
+    from app.database import session_factory
+    from app.models import DemoAnalysis
+
+    # 跑一场分析（v1_stub 已在 fixture？此文件无 fixture——直接手工种 DemoAnalysis）
+    with session_factory() as s:
+        s.add(DemoAnalysis(match_id="PVP@R1", payload={"rivals": [
+            {"opponent_id": "900", "opponent_name": "狙击手成才", "i_killed_them": 2, "they_killed_me": 5},
+        ]}))
+        s.add(DemoAnalysis(match_id="PVP@R2", payload={"rivals": [
+            {"opponent_id": "900", "opponent_name": "狙击手成才", "i_killed_them": 1, "they_killed_me": 3},
+            {"opponent_id": "901", "opponent_name": "路人甲", "i_killed_them": 4, "they_killed_me": 0},
+        ]}))
+        s.commit()
+
+    out = client.get("/api/matches/rivals?top=5").json()
+    by_id = {r["opponent_id"]: r for r in out}
+    assert by_id["900"]["they_killed_me"] == 8
+    assert by_id["900"]["i_killed_them"] == 3
+    assert by_id["900"]["encounters"] == 2
+    assert out[0]["opponent_id"] == "900"  # 按总互动排序

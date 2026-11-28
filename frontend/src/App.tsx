@@ -22,7 +22,7 @@ import { apiGet, apiPost, apiPut } from "./api/client";
 import { LongTermTrends } from "./components/LongTermTrends";
 import { GoReportPage } from "./components/GoReportPage";
 import { CoachChat } from "./components/CoachChat";
-import { SeasonTrends } from "./components/SeasonTrends";
+import { SeasonTrends, RivalsCard } from "./components/SeasonTrends";
 import { WanmeiLogin } from "./components/WanmeiLogin";
 import { MatchDetailModal } from "./components/MatchDetailModal";
 import { LearnPage } from "./components/LearnPage";
@@ -154,11 +154,12 @@ function OverviewPage() {
         <SeasonTrends data={season.data.data as Record<string, any>} />
       ) : (
         <Card size="small">
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <span style={{ color: "#999", fontSize: 12 }}>
             赛季统计尚未同步——点上方任意一次「同步」后自动生成趋势图
-          </Text>
+          </span>
         </Card>
       )}
+      <RivalsCard />
     </Space>
   );
 }

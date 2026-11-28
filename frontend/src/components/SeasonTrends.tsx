@@ -1,7 +1,9 @@
 // 赛季总览：rating 趋势折线 + 核心指标卡 + 热图地图
 import { useEffect, useRef } from "react";
 import * as echarts from "echarts";
-import { Card, Col, Row, Statistic, Space, Tag } from "antd";
+import { useQuery } from "@tanstack/react-query";
+import { Card, Col, Row, Statistic, Space, Table, Tag } from "antd";
+import { apiGet } from "../api/client";
 
 export function SeasonTrends({ data }: { data: Record<string, any> }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -58,6 +60,43 @@ export function SeasonTrends({ data }: { data: Record<string, any> }) {
           ))}
         </Space>
       ) : null}
+    </Card>
+  );
+}
+
+
+// 宿敌 Top5（跨场聚合：他杀我/我杀他）
+export function RivalsCard() {
+  const rivals = useQuery({
+    queryKey: ["rivals"],
+    queryFn: () => apiGet<Record<string, any>[]>("/matches/rivals?top=5"),
+    retry: false,
+  });
+  if (rivals.error || !rivals.data?.length) return null;
+  return (
+    <Card size="small" title="宿敌 Top5（跨场对位）">
+      <Table
+        rowKey="opponent_id"
+        size="small"
+        pagination={false}
+        dataSource={rivals.data}
+        columns={[
+          { title: "对手", dataIndex: "opponent_name", ellipsis: true },
+          { title: "他杀我", dataIndex: "they_killed_me", width: 70, render: (v: number) => <span style={{ color: "#f87171" }}>{v}</span> },
+          { title: "我杀他", dataIndex: "i_killed_them", width: 70, render: (v: number) => <span style={{ color: "#4ade80" }}>{v}</span> },
+          { title: "相遇", dataIndex: "encounters", width: 60 },
+          {
+            title: "克制指数",
+            key: "idx",
+            render: (_: unknown, r: Record<string, number>) => {
+              const total = r.they_killed_me + r.i_killed_them;
+              if (!total) return "—";
+              const ratio = r.they_killed_me / total;
+              return <span style={{ color: ratio > 0.5 ? "#f87171" : "#4ade80" }}>{(ratio * 100).toFixed(0)}%</span>;
+            },
+          },
+        ]}
+      />
     </Card>
   );
 }

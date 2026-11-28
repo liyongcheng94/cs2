@@ -82,6 +82,25 @@ def stats_trends(session: SessionDep, user: CurrentUser) -> dict:
     return {"points": points, "by_map": list(by_map.values())}
 
 
+@router.get("/rivals")
+def rivals_summary(session: SessionDep, top: int = 8) -> list[dict]:
+    """跨场宿敌聚合：遍历全部已分析对局的 rivals 行，按对手累加（他杀我/我杀他/相遇场次）。"""
+    from collections import defaultdict
+
+    rows = session.exec(select(DemoAnalysis)).all()
+    agg: dict[str, dict] = defaultdict(lambda: {"opponent_id": "", "opponent_name": "", "they_killed_me": 0, "i_killed_them": 0, "encounters": 0})
+    for r in rows:
+        payload = r.payload or {}
+        for rival in payload.get("rivals") or []:
+            oid = str(rival.get("opponent_id"))
+            agg_row = agg[oid]
+            agg_row["opponent_id"] = oid
+            agg_row["opponent_name"] = rival.get("opponent_name") or agg_row["opponent_name"]
+            agg_row["they_killed_me"] += int(rival.get("they_killed_me") or 0)
+            agg_row["i_killed_them"] += int(rival.get("i_killed_them") or 0)
+            agg_row["encounters"] += 1
+    ranked = sorted(agg.values(), key=lambda x: -(x["they_killed_me"] + x["i_killed_them"]))
+    return ranked[:max(1, top)]
 @router.get("")
 def list_matches(session: SessionDep, user: CurrentUser) -> list[dict]:
     stmt = _scoped(select(Match).order_by(Match.played_at.desc()), user)
@@ -276,3 +295,5 @@ def match_perfect(match_id: int, side: str = "ALL", session: SessionDep = None, 
     events = extract_perfect_events(demo_path, steam_id)
     res = analyze_perfect(events, steam_id, side=side)
     return res.model_dump()
+
+

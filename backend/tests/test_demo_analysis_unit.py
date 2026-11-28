@@ -457,3 +457,29 @@ def test_collect_utility_spots_filters_by_side():
     assert len(smokes) == 2 and {s.x for s in smokes} == {100.0, 300.0}
     assert len(fires) == 1 and fires[0].x == 500.0
     assert len(blinds) == 2 and {b.y for b in blinds} == {800.0, 1000.0}
+
+
+def test_analyze_rivals_aggregation():
+    """
+    Given user 击杀敌人 A 两次、被敌人 B 杀一次、自雷除外
+    When  analyze_rivals
+    Then  按对手聚合 他杀我/我杀他，且排除自身
+    """
+    from app.services.demo_analysis import analyze_rivals
+
+    sid = 111
+    a, b_, me = 222, 333, 111
+    rows = [
+        {"attacker_steamid": me, "victim_steamid": a, "attacker_name": "我", "victim_name": "A"},
+        {"attacker_steamid": me, "victim_steamid": a, "attacker_name": "我", "victim_name": "A"},
+        {"attacker_steamid": b_, "victim_steamid": me, "attacker_name": "B", "victim_name": "我"},
+        {"attacker_steamid": me, "victim_steamid": me, "attacker_name": "我", "victim_name": "我"},  # 自雷排除
+    ]
+    import polars as pl
+
+    kills = pl.DataFrame(rows)
+    out = analyze_rivals(kills, sid)
+    by_id = {o["opponent_id"]: o for o in out}
+    assert by_id[str(a)]["i_killed_them"] == 2
+    assert by_id[str(b_)]["they_killed_me"] == 1
+    assert all(o["opponent_id"] != str(me) for o in out)

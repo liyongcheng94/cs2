@@ -644,6 +644,7 @@ def run_analysis(dem_path, match_id: str, steam_id: str) -> tuple[FourDimAnalysi
 
         deaths_dim, _events = analyze_deaths(kills, rounds, sid)
         duels_dim = analyze_duels(kills, sid)
+        rivals = analyze_rivals(kills, sid)
         fs_rate, mirror_rate = analyze_duels_damage(demo.damages, kills, sid)
         duels_dim.first_strike_win_rate = fs_rate
         duels_dim.mirror_win_rate = mirror_rate
@@ -660,6 +661,7 @@ def run_analysis(dem_path, match_id: str, steam_id: str) -> tuple[FourDimAnalysi
 
         analysis = FourDimAnalysis(
             match_id=match_id,
+            rivals=rivals,
             deaths=deaths_dim,
             economy=economy_dim,
             utility=utility_dim,
@@ -676,3 +678,22 @@ def run_analysis(dem_path, match_id: str, steam_id: str) -> tuple[FourDimAnalysi
     meta = {"parser": "awpy 3.3.0", "cost_s": round(cost, 1), "peak_mem_mb": round(peak / 1e6)}
     logger.info(f"[demo解析] matchId={match_id} 耗时={meta['cost_s']}s 峰值内存={meta['peak_mem_mb']}MB")
     return analysis, meta
+
+
+def analyze_rivals(kills, steam_id: int) -> list[dict]:
+    """跨场宿敌聚合（单场粒度）：按对手聚合 他杀我/我杀他/助攻参与，供多场汇总。
+
+    返回 [{opponent_id, opponent_name, they_killed_me, i_killed_them}]，
+    多场聚合由调用方（API 层）把所有已分析对局的 rivals 累加排序。
+    """
+    out: dict[str, dict] = {}
+    for r in kills.to_dicts():
+        a, v = str(r.get("attacker_steamid")), str(r.get("victim_steamid"))
+        an, vn = r.get("attacker_name") or "", r.get("victim_name") or ""
+        if a == str(steam_id) and v != str(steam_id):
+            row = out.setdefault(v, {"opponent_id": v, "opponent_name": vn, "i_killed_them": 0, "they_killed_me": 0})
+            row["i_killed_them"] += 1
+        elif v == str(steam_id) and a != str(steam_id):
+            row = out.setdefault(a, {"opponent_id": a, "opponent_name": an, "i_killed_them": 0, "they_killed_me": 0})
+            row["they_killed_me"] += 1
+    return sorted(out.values(), key=lambda x: -(x["they_killed_me"] + x["i_killed_them"]))
