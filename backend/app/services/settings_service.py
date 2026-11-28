@@ -10,6 +10,7 @@ SECRET_KEYS = {"wanmei.access_token", "bili.sessdata", "mindvault.password", "ai
 
 DEFAULTS: dict[str, str] = {
     "mv.base_url": "http://127.0.0.1:8001",
+    "mv.enabled": "0",  # MindVault 联动全局开关（默认不联动）
     "ai.provider": "deepseek",
 }
 

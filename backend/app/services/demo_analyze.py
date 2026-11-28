@@ -138,7 +138,11 @@ async def demo_analyze_handler(task: Task, session_factory_fn: Callable[[], Sess
         ai = build_ai_client(session)
     report = await build_report(analysis, ai=ai)
 
-    # 4) 推送（幂等；MindVault 挂了只降级）
+    # 4) 推送（开关关闭时本地保存即可）
+    with session_factory_fn() as session:
+        link_on = mv_enabled(session)
+    if not link_on:
+        logger.info(f"[demo解析] matchId={match_id} MindVault 联动关闭，仅本地保存")
     pushed = await push_report(
         analysis,
         report.markdown,

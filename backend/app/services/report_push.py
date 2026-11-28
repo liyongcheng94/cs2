@@ -23,6 +23,13 @@ def _new_mv() -> MindVaultClient:
     return MindVaultClient(base_url=base or "http://127.0.0.1:8001", password=pwd or None)
 
 
+def mv_enabled(session: Session) -> bool:
+    """MindVault 联动全局开关（默认不联动）。"""
+    from . import settings_service
+
+    return (settings_service.get_value(session, "mv.enabled") or "0") == "1"
+
+
 async def push_report(
     analysis: FourDimAnalysis,
     content_md: str,
@@ -35,7 +42,19 @@ async def push_report(
     """推送复盘到 MindVault（幂等键 matchId+prompt_version）；结果永远先落本地 Report 行。"""
     match_id = analysis.match_id
     source_hash = compute_source_hash(match_id, prompt_version)
-    out: dict = {"created": False, "uuid": None, "reason": None, "match_id": match_id}
+    out: dict = {"created": False, "uuid": None, "reason": None, "match_id": match_id, "skipped": False}
+    with session_factory() as session:
+        if not mv_enabled(session):
+            # 开关关闭：仅本地保存，不做任何 MindVault 网络调用
+            row = session.exec(select(Report).where(Report.source_hash == source_hash)).first()
+            if row is None:
+                row = Report(match_id=match_id, prompt_version=prompt_version,
+                             source_hash=source_hash, title=title or f"复盘 · {match_id}",
+                             content_md=content_md, review_json=review_json, degraded=degraded)
+                session.add(row)
+                session.commit()
+            out["skipped"] = True
+            return out
     with session_factory() as session:
         row = session.exec(select(Report).where(Report.source_hash == source_hash)).first()
         is_new_row = row is None

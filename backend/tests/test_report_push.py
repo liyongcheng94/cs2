@@ -57,6 +57,7 @@ def test_push_report_creates_new(client, mv_stub):
     When  push_report
     Then  走 MCP create_note；Report 行记录 mv_uuid 与 source_hash
     """
+    client.put("/api/settings", json={"mv.enabled": "1"})
     from app.services.report_push import push_report
 
     out = asyncio.run(push_report(_fake_analysis(), "复盘MD内容", prompt_version=PromptVersion))
@@ -82,6 +83,7 @@ def test_push_report_updates_existing(client, mv_stub):
     When  再次 push_report（解析升级后重新生成）
     Then  走 REST PUT 更新而非 create（不产生重复笔记）
     """
+    client.put("/api/settings", json={"mv.enabled": "1"})
     from sqlmodel import select
 
     from app.database import session_factory
@@ -117,6 +119,8 @@ def test_push_report_mindvault_down_keeps_local(client, monkeypatch):
     import app.services.report_push as rp
     from app.services.mindvault_client import MindVaultClient
     from app.services.report_push import push_report
+
+    client.put("/api/settings", json={"mv.enabled": "1"})
 
     monkeypatch.setattr(rp, "_new_mv", lambda: MindVaultClient(base_url="http://127.0.0.1:1", transport=None))
     out = asyncio.run(push_report(_fake_analysis("PVP@PUSH3"), "md", prompt_version=PromptVersion))
@@ -175,6 +179,7 @@ def test_push_report_update_404_selfheals_to_create(client, monkeypatch):
 
     monkeypatch.setattr(rp, "_new_mv", lambda: MindVaultClient(base_url="http://stub", transport=httpx.MockTransport(handler)))
 
+    client.put("/api/settings", json={"mv.enabled": "1"})
     with session_factory() as s:
         s.add(Report(match_id="PVP@HEAL", prompt_version=PromptVersion,
                      source_hash=compute_source_hash("PVP@HEAL", PromptVersion),
@@ -186,3 +191,65 @@ def test_push_report_update_404_selfheals_to_create(client, monkeypatch):
     with session_factory() as s:
         row = s.exec(select(Report).where(Report.match_id == "PVP@HEAL")).first()
         assert row.mv_uuid == "new-uuid-9" and row.pushed is True
+
+
+def test_push_report_skipped_when_link_disabled(client, monkeypatch):
+    """
+    Given mv.enabled=0（默认不联动）
+    When  push_report
+    Then  skipped=True 不做任何 MindVault 网络调用，但 Report 本地行仍落库
+    """
+    import asyncio
+    import json as _json
+
+    import httpx as _httpx
+
+    import app.services.report_push as rp
+    from app.schemas.analysis import AnalysisMeta, DuelBucket, DuelDim, FourDimAnalysis
+    from app.services.mindvault_client import MindVaultClient
+    from app.services.report import PromptVersion
+
+    real_calls = []
+
+    class SnoopingMV(MindVaultClient):
+        def __init__(self):
+            super().__init__(base_url="http://stub")
+
+        async def push_note(self, title, content, topic_name=None, topic_id=None):
+            real_calls.append(title)
+            return {"uuid": "x", "item_id": 1, "title": title}
+
+        async def update_note(self, uuid, content=None, title=None):
+            real_calls.append("update")
+            return {"uuid": uuid}
+
+    monkeypatch.setattr(rp, "_new_mv", lambda: SnoopingMV())
+
+    a = FourDimAnalysis(match_id="PVP@OFF", meta=AnalysisMeta(parser="t"))
+    out = asyncio.run(rp.push_report(a, "md", prompt_version=PromptVersion))
+
+    assert out.get("skipped") is True
+    assert real_calls == []  # 无任何 MindVault 调用
+
+    from sqlmodel import select
+
+    from app.database import session_factory
+    from app.models import Report
+
+    with session_factory() as s:
+        row = s.exec(select(Report).where(Report.match_id == "PVP@OFF")).first()
+        assert row is not None and row.content_md == "md"  # 本地行在
+        assert row.pushed is False
+
+
+def test_mv_enabled_default_off(client):
+    """
+    Given 全新环境（未设置 mv.enabled）
+    When  检查联动开关
+    Then  默认关闭（0）
+    """
+    from app.database import session_factory
+    from app.services.report_push import mv_enabled
+
+    with session_factory() as s:
+        assert mv_enabled(s) is False

@@ -185,6 +185,13 @@ async def bili_learn_handler(task: Task, session_factory_fn: Callable[[], Sessio
                 logger.info(f"[B站学习] bvid={bv} 评论信号入库 {added} 条")
 
         async def _push_or_update(title_arg: str, md_arg: str, existing_uuid: str | None) -> dict:
+            from ..database import session_factory as _sf
+            from . import settings_service as _ss
+
+            with _sf() as s:
+                if (_ss.get_value(s, "mv.enabled") or "0") != "1":
+                    logger.info("[B站学习] MindVault 联动关闭，仅本地保存")
+                    return {"created": False, "uuid": None, "reason": "联动关闭"}
             mv = _new_mv()
             if existing_uuid:
                 await mv.update_note(existing_uuid, content=md_arg, title=title_arg)

@@ -105,7 +105,16 @@ async def weekly_report_handler(task: Task, session_factory_fn: Callable[[], Ses
         md += "\n".join(lines)
 
     title = f"CS2 周报 · {week}"
-    out: dict = {"created": False, "uuid": None, "reason": None, "week": week}
+    out: dict = {"created": False, "uuid": None, "reason": None, "week": week, "skipped": False}
+    from ..database import session_factory as _sf
+    from . import settings_service as _ss
+
+    with _sf() as s:
+        if (_ss.get_value(s, "mv.enabled") or "0") != "1":
+            out["skipped"] = True
+            out["reason"] = "联动关闭"
+            logger.info("[周报] MindVault 联动关闭，仅本地保存")
+            return out
     try:
         mv = _new_mv()
         pushed = await mv.push_note(title, md, topic_name=WEEKLY_TOPIC)
