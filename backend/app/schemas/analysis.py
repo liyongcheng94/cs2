@@ -186,10 +186,22 @@ class RivalRow(BaseModel):
     they_killed_me: int = 0
 
 
+class TurnpointRound(BaseModel):
+    """转折点回合（回合级叙事数据源）。"""
+
+    round_no: int
+    winner_side: str = ""
+    score: str = ""
+    reason: str = ""
+    kills: int = 0
+    kill_lines: list[dict] = Field(default_factory=list)
+
+
 class FourDimAnalysis(BaseModel):
     schema_version: str = SCHEMA_VERSION
     match_id: str
     rivals: list[RivalRow] = Field(default_factory=list)  # 单场宿敌行（跨场聚合数据源）
+    turnpoints: list[TurnpointRound] = Field(default_factory=list)  # 转折点回合（≤3）
     deaths: DeathDim = Field(default_factory=DeathDim)
     economy: EconomyDim = Field(default_factory=EconomyDim)
     utility: UtilityDim = Field(default_factory=UtilityDim)

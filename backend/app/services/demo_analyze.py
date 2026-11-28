@@ -112,7 +112,26 @@ async def demo_analyze_handler(task: Task, session_factory_fn: Callable[[], Sess
     except Exception as exc:  # noqa: BLE001 — 评分失败不影响主链路
         logger.warning(f"[demo解析] matchId={match_id} 六维评分跳过：{exc}")
 
-    # 3) 复盘（AI 桥；provider 未配好自动降级纯文本）
+    # 2.6b) 转折点回合检测（回合级叙事数据源，纯解析不依赖网络）
+    try:
+        from awpy import Demo as _Demo
+
+        from .demo_analysis import detect_turnpoints
+
+        demo_obj = _Demo(path=str(dem))
+        turnpoints = detect_turnpoints(demo_obj.rounds, demo_obj.kills, max_turnpoints=3)
+        analysis.turnpoints = turnpoints
+        with session_factory_fn() as session:
+            row = session.exec(select(DemoAnalysis).where(DemoAnalysis.match_id == match_id)).first()
+            if row is not None:
+                row.payload = analysis.model_dump()
+                session.add(row)
+                session.commit()
+        logger.info(f"[demo解析] matchId={match_id} 转折点 {len(turnpoints)} 个")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"[demo解析] matchId={match_id} 转折点检测跳过：{exc}")
+
+    # 3) 复盘（AI 桥；provider 未配好自动降级纯文本；转折点回合注入 prompt）
     with session_factory_fn() as session:
         from .ai_client import build_ai_client
 
