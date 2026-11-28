@@ -160,3 +160,21 @@ class MindVaultClient:
             raise MindVaultError(f"视频捕获失败：HTTP {resp.status_code} {resp.text[:200]}")
         logger.info(f"[MindVault] capture_video {Path(path).name} preset={preset}")
         return resp.json()
+
+
+    async def generate_flashcards(self, item_uuid: str, count: int = 3) -> dict[str, Any]:
+        """从 MindVault 条目生成问答闪卡（幂等；SRS 调度由 MindVault flashcards 管）。"""
+        resp = await self.request(
+            "POST", "/api/flashcards/generate",
+            json={"item_uuid": item_uuid, "count": count},
+        )
+        if resp.status_code != 200:
+            raise MindVaultError(f"闪卡生成失败：HTTP {resp.status_code} {resp.text[:200]}")
+        return resp.json()
+
+    async def due_flashcards(self, limit: int = 20) -> dict[str, Any]:
+        """到期复习队列。"""
+        resp = await self.request("GET", "/api/flashcards/due", params={"limit": limit})
+        if resp.status_code != 200:
+            raise MindVaultError(f"到期队列读取失败：HTTP {resp.status_code}")
+        return resp.json()

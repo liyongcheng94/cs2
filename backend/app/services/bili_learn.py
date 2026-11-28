@@ -190,6 +190,11 @@ async def bili_learn_handler(task: Task, session_factory_fn: Callable[[], Sessio
                 await mv.update_note(existing_uuid, content=md_arg, title=title_arg)
                 return {"created": False, "uuid": existing_uuid, "reason": None}
             pushed = await mv.push_note(title_arg, md_arg, topic_name=SUMMARY_TOPIC)
+            # 新笔记 → AI 生成道具复习闪卡（幂等；失败不影响总结已推送）
+            try:
+                await mv.generate_flashcards(pushed["uuid"], count=3)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(f"[B站学习] 闪卡生成跳过：{exc}")
             return {"created": True, "uuid": pushed["uuid"], "reason": None}
 
         pushed = await _push_or_update(title, summary_md, existing_uuid=existing_uuid)

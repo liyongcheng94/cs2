@@ -70,3 +70,50 @@ def test_bili_learn_up_mid_path(client, monkeypatch):
     assert body["status"] == "success", body["error"]
     assert body["result"]["results"][0]["bvid"] == "BV1UP1"
     assert pushed == ["UP投稿"]
+
+
+def test_bili_learn_generates_flashcards_for_new_note(client, monkeypatch):
+    """
+    Given 新笔记推送成功 + MindVault 闪卡生成桩
+    When  bili_learn 新建总结
+    Then  追加调用 /api/flashcards/generate（SRS 由 MindVault 管）
+    """
+    import json as _json
+
+    import httpx as _httpx
+
+    import app.services.bili_learn as bl
+    from app.services.mindvault_client import MindVaultClient
+
+    flash_calls = []
+
+    def handler(request: _httpx.Request) -> _httpx.Response:
+        if request.url.path == "/api/topics":
+            return _httpx.Response(200, json=[]) if request.method == "GET" else _httpx.Response(201, json={"id": 1, "name": "CS2视频总结"})
+        if request.url.path == "/api/mcp":
+            body = _json.loads(request.content)
+            return _httpx.Response(200, json={"jsonrpc": "2.0", "id": body["id"], "result": {"content": [{"type": "text", "text": _json.dumps({"item_id": 1, "uuid": "sum-u9", "title": body["params"]["arguments"]["title"]})}], "isError": False}})
+        if request.url.path == "/api/flashcards/generate":
+            flash_calls.append(_json.loads(request.content))
+            return _httpx.Response(200, json={"generated": 3})
+
+    def stub_mv():
+        return MindVaultClient(base_url="http://stub", transport=_httpx.MockTransport(handler))
+
+    monkeypatch.setattr(bl, "_new_mv", stub_mv)
+    async def fake_search(keyword, sess, page=1):
+        return [{"bvid": "BV1FC", "title": "道具教学", "author": "UP", "pubdate": 1}]
+    async def fake_fetch(bvid, sess):
+        return [{"from": 1.0, "text": "字幕行"}]
+    monkeypatch.setattr(bl, "search_videos", fake_search)
+    monkeypatch.setattr(bl, "fetch_subtitle_timed", fake_fetch)
+    monkeypatch.setattr(bl, "_credential_sess", lambda s: "SESS")
+    monkeypatch.setattr(bl, "_new_ai", lambda: None)
+
+    client.put("/api/settings", json={"bili.sessdata": "SESS"})
+    task_id = client.post("/api/tasks", json={"type": "bili_learn", "payload": {"keyword": "CS2"}}).json()["id"]
+    run = client.post(f"/api/tasks/{task_id}/run")
+    assert run.status_code == 200
+    body = client.get(f"/api/tasks/{task_id}").json()
+    assert body["status"] == "success"
+    assert flash_calls and flash_calls[0]["item_uuid"] == "sum-u9"
