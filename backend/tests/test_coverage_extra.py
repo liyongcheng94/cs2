@@ -95,6 +95,7 @@ async def test_bili_learn_handler_degraded_flow(client, monkeypatch, tmp_path):
     monkeypatch.setattr(bl, "fetch_subtitle_timed", fake_fetch)
     monkeypatch.setattr(bl, "_credential_sess", lambda s: "SESS")
     monkeypatch.setattr(bl, "_new_ai", lambda: None)
+    client.put("/api/settings", json={"mv.enabled": "1"})
 
     pushed = []
 

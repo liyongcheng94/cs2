@@ -80,6 +80,7 @@ def test_weekly_report_handler_pushes(client, monkeypatch):
     monkeypatch.setattr(wk, "_new_mv", lambda: StubMV())
     monkeypatch.setattr(wk, "build_ai_client", lambda session: StubAI())
     task = Task(id=1, type="weekly_report")
+    client.put("/api/settings", json={"mv.enabled": "1"})
     out = asyncio.run(weekly_report_handler(task, session_factory))
     assert out["created"] is True and out["uuid"] == "weekly-u1"
 
@@ -113,5 +114,6 @@ def test_weekly_ai_comment_actually_reaches_push(client, monkeypatch):
     monkeypatch.setattr(wk, "_new_mv", lambda: StubMV())
     monkeypatch.setattr(wk, "build_ai_client", lambda session: StubAI())
     task = Task(id=2, type="weekly_report")
+    client.put("/api/settings", json={"mv.enabled": "1"})
     out = asyncio.run(weekly_report_handler(task, session_factory))
     assert out["created"] is True and out["uuid"] == "weekly-u2"

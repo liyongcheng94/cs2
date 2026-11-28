@@ -18,7 +18,7 @@ from ..schemas.analysis import FourDimAnalysis
 from . import settings_service
 from .demo_dl import DemoNotAvailableError, acquire_demo
 from .report import PromptVersion, build_report
-from .report_push import push_report
+from .report_push import gc_raw_demo, mv_enabled, push_report
 
 # 解析引擎（awpy 选型，见 docs/spike-demo-parsers.md）；测试桩可 monkeypatch 替换
 from .demo_analysis import run_analysis  # noqa: E402

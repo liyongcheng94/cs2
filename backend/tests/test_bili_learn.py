@@ -73,6 +73,7 @@ def _run(payload: dict):
 
 
 def test_bili_learn_bvid_full_ai_path(client, monkeypatch):
+    client.put("/api/settings", json={"mv.enabled": "1"})
     """
     Given BV 入口 + 字幕桩 + AI 桩（合法 JSON 双段输出）+ MindVault 桩
     When  执行 bili_learn

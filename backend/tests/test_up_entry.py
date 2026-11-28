@@ -33,6 +33,7 @@ async def test_search_user_videos_parses(monkeypatch):
 
 
 def test_bili_learn_up_mid_path(client, monkeypatch):
+    client.put("/api/settings", json={"mv.enabled": "1"})
     """
     Given SESSDATA 已配 + 检索/字幕/AI 桩
     When  执行 bili_learn（up_mid）
@@ -73,6 +74,7 @@ def test_bili_learn_up_mid_path(client, monkeypatch):
 
 
 def test_bili_learn_generates_flashcards_for_new_note(client, monkeypatch):
+    client.put("/api/settings", json={"mv.enabled": "1"})
     """
     Given 新笔记推送成功 + MindVault 闪卡生成桩
     When  bili_learn 新建总结

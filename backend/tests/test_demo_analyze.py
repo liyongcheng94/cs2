@@ -65,6 +65,7 @@ def fake_pipeline(client, monkeypatch, tmp_path):
 
 
 def _seed_token(client):
+    client.put("/api/settings", json={"mv.enabled": "1"})
     client.put("/api/settings", json={"wanmei.access_token": "tok", "wanmei.steam_id": "76561198339750836"})
 
 

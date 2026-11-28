@@ -59,6 +59,7 @@ def test_weekly_includes_death_patterns(client, monkeypatch):
     from app.services.mindvault_client import MindVaultClient
 
     _seed(client)
+    client.put("/api/settings", json={"mv.enabled": "1"})
     captured: dict = {}
 
     class StubMV(MindVaultClient):
@@ -70,6 +71,7 @@ def test_weekly_includes_death_patterns(client, monkeypatch):
             return {"uuid": "w-1"}
 
     monkeypatch.setattr(wk, "_new_mv", lambda: StubMV())
+    monkeypatch.setattr(wk, "_mv_enabled", lambda: True)
     task = wk.Task(id=1, type="weekly_report")
     out = asyncio_run(wk.weekly_report_handler(task, session_factory))
     assert out["created"] is True

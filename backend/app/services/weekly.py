@@ -127,6 +127,15 @@ async def weekly_report_handler(task: Task, session_factory_fn: Callable[[], Ses
     return out
 
 
+def _mv_enabled() -> bool:
+    """MindVault 联动全局开关（默认不联动）。"""
+    from ..database import session_factory as _sf
+    from . import settings_service as _ss
+
+    with _sf() as s:
+        return (_ss.get_value(s, "mv.enabled") or "0") == "1"
+
+
 def register() -> None:
     from . import task_manager
 
