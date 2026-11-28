@@ -67,16 +67,17 @@ def test_put_masked_secret_does_not_overwrite(client):
     client.put("/api/settings", json={"mindvault.password": "real-pw-456"})
     # detail 亦脱敏（新契约）：明文只在服务层可取
     assert client.get("/api/settings/detail").json()["mindvault.password"].startswith("****")
-
+    client.put("/api/settings", json={"mindvault.password": "real-pw-456"})
+    # detail 亦脱敏（新契约）：明文只在服务层可取
+    assert client.get("/api/settings/detail").json()["mindvault.password"].startswith("****")
     resp = client.put("/api/settings", json={"mindvault.password": "****56", "mv.base_url": "http://x:1"})
     assert resp.status_code == 200
     # API 响应掩码；服务层明文未被覆盖
-    assert client.get("/api/settings/detail").json()["mindvault.password"].startswith("****")
-    from app.database import session_factory as _sf
-    from app.services.settings_service import get_value as _gv
+    from app.database import session_factory
+    from app.services.settings_service import get_value
 
-    with _sf() as s:
-        assert _gv(s, "mindvault.password") == "real-pw-456"
+    with session_factory() as s:
+        assert get_value(s, "mindvault.password") == "real-pw-456"
     assert client.get("/api/settings").json()["mv.base_url"] == "http://x:1"
 
 

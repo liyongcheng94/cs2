@@ -655,9 +655,15 @@ def run_analysis(dem_path, match_id: str, steam_id: str) -> tuple[FourDimAnalysi
         utility_dim.spots = collect_utility_spots(demo, sid, user_side)
         highlights = detect_highlights(kills, rounds, sid, user_side)
         pistol_dim = analyze_pistol_rounds(kills, rounds, sid)
-        from .position_analysis import analyze_positions
+        from .position_analysis import analyze_callouts, analyze_positions
 
         position_cells = analyze_positions(kills, sid)
+        try:
+            hdr_map = str(demo.header.get("map_name") or "")
+            map_en = hdr_map.split("/")[-1] if "/" in hdr_map else hdr_map
+            callout_cells = analyze_callouts(kills, sid, map_en)
+        except Exception:
+            callout_cells = []  # 未知地图/解析失败 → 空，不影响主流程
 
         analysis = FourDimAnalysis(
             match_id=match_id,
@@ -669,6 +675,7 @@ def run_analysis(dem_path, match_id: str, steam_id: str) -> tuple[FourDimAnalysi
             highlights=highlights,
             pistol_rounds=pistol_dim,
             positions=position_cells,
+            callouts=callout_cells,
             meta=AnalysisMeta(parser="awpy 3.3.0"),
         )
     finally:

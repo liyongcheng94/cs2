@@ -186,3 +186,42 @@ class TestAim:
         assert res.aim.hits == 2  # 两次击杀=两次命中
         assert res.aim.hit_rate == pytest.approx(0.5)
         assert res.aim.avg_kill_distance == pytest.approx(16.0)
+
+
+class TestTradeNearDistanceFilter:
+    """补枪机会距离过滤：只有队友死时我在 ≤20m 内才算「我的补枪机会」。
+
+    场景：
+    - 队友死时我在附近（≤20m）→ 记 1 次机会；5s 内我击杀凶手 → 补枪成功。
+    - 队友死时我在远处（>20m）→ 不计入我的机会。
+    - events 无 positions（旧数据/旧测试）→ 回退为全队口径，行为不变。
+    """
+
+    def _pos(self, tick, sid, x, y):
+        return {"tick": tick, "steamid": str(sid), "x": x, "y": y}
+
+    def test_near_death_counts_far_death_excluded(self, basic_events):
+        events = dict(basic_events)
+        events["positions"] = [
+            # R1 t=2000 MATE 死于 (100,100)：我在 (105,102) 附近 → 机会；EN2 凶手在 (98,99)
+            self._pos(1968, MATE, 100.0, 100.0),
+            self._pos(1968, MY, 105.0, 102.0),
+            # 远处场景：R1 t=3500 MATE 再死一次 (0,0)，我在 (500,500) → 不算
+            self._pos(3488, MATE, 0.0, 0.0),
+            self._pos(3488, MY, 500.0, 500.0),
+        ]
+        # R1 后半段我附近（支持 t=2300 补枪位置无关）
+        events["kills"] = [
+            _kill(2000, EN2, MATE, distance=10.0),   # 队友死（近）
+            _kill(2300, MY, EN2, distance=12.0),     # 我补枪成功
+            _kill(3500, EN3, MATE, distance=10.0),   # 队友死（远）
+        ]
+        res = analyze_perfect(events, MY, side="ALL")
+        assert res.trade.trade_opportunities == 1  # 只有近的那次
+        assert res.trade.trade_kills == 1
+
+    def test_positions_absent_falls_back_to_team_wide(self, basic_events):
+        # basic_events 无 positions 字段 → 维持全队口径（MATE 死 1 次 = 1 机会）
+        res = analyze_perfect(basic_events, MY, side="ALL")
+        assert res.trade.trade_opportunities == 1
+        assert res.trade.trade_kills == 1

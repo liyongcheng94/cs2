@@ -106,9 +106,23 @@ def extract_perfect_events(demo_path: str, my_steam_id) -> dict:
     except Exception:
         pass
 
+    # 位置时间线（补枪距离过滤用）：每 64 tick 采样一次全体玩家 X/Y + 所有关键 tick
+    positions = []
+    try:
+        max_tick = max([k["tick"] for k in kills] + [r["end_tick"] for r in rounds] or [0])
+        sample_ticks = sorted(set(range(0, max_tick + 1, 64)) | {k["tick"] for k in kills})
+        pos_df = p.parse_ticks(["X", "Y"], ticks=sample_ticks)
+        for _, r in pos_df.iterrows():
+            sid = _s(r.get("steamid"))
+            if sid is None or r.get("X") is None or r.get("Y") is None:
+                continue
+            positions.append({"tick": int(r["tick"]), "steamid": sid, "x": float(r["X"]), "y": float(r["Y"])})
+    except Exception:
+        pass  # 无位置数据时补枪机会回退为全队口径
+
     return {
         "rounds": rounds, "kills": kills, "hurts": hurts,
-        "flashes": flashes, "weapon_fires": fires,
+        "flashes": flashes, "weapon_fires": fires, "positions": positions,
     }
 
 
