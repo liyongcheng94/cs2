@@ -106,6 +106,7 @@ def _seed_token(client) -> None:
 @pytest.mark.anyio
 async def test_f1_download_and_analyze_chain(client, monkeypatch):
     """Given PVP@ 场次且无本地缓存，When 执行 demo_fetch，Then 下载解压并自动完成分析。"""
+    client.put("/api/settings", json={"mv.enabled": "1"})  # 联动开（默认 0 跳过推送）
     # 用一个不在客户端目录的场：PVP@9000000000000000001
     num = "9000000000000000001"
     seen: dict[str, httpx.Request] = {}
@@ -189,6 +190,7 @@ async def test_f3_auth_error_breaker(client, monkeypatch):
 @pytest.mark.anyio
 async def test_f4_cache_hit_skips_download(client, monkeypatch):
     """Given 缓存目录已有 .dem，When 执行，Then 不发起 demo 下载请求直接分析。"""
+    client.put("/api/settings", json={"mv.enabled": "1"})  # 联动开（默认 0 跳过推送）
     from app.config import get_data_dir
 
     num = "9000000000000000004"

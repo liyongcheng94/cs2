@@ -157,6 +157,7 @@ def go_report(n: int = 10, session: SessionDep = None, user: CurrentUser = None)
     mine_acc: dict[str, list[float]] = {}
     room_acc: dict[str, list[float]] = {}
     cell_acc: dict[tuple[int, int], dict] = {}
+    callout_acc: dict[str, dict] = {}
     analyzed = 0
     for match, da in rows:
         payload = da.payload if not isinstance(da.payload, str) else json.loads(da.payload)
@@ -180,6 +181,10 @@ def go_report(n: int = 10, session: SessionDep = None, user: CurrentUser = None)
             acc = cell_acc.setdefault(k, {"kills": 0, "deaths": 0})
             acc["kills"] += c.get("kills", 0)
             acc["deaths"] += c.get("deaths", 0)
+        for c in payload.get("callouts") or []:
+            acc = callout_acc.setdefault(c.get("place") or "?", {"kills": 0, "deaths": 0})
+            acc["kills"] += c.get("kills", 0)
+            acc["deaths"] += c.get("deaths", 0)
 
     five_dim = {}
     for d in dims:
@@ -199,7 +204,22 @@ def go_report(n: int = 10, session: SessionDep = None, user: CurrentUser = None)
             label = "均衡"
         positions.append({"grid_row": r, "grid_col": c, "kills": v["kills"], "deaths": v["deaths"],
                           "win_rate": round(wr, 3) if wr is not None else None, "label": label})
-    return {"five_dim": five_dim, "positions": positions, "matches_analyzed": analyzed}
+
+    def _label(n: int, wr: float | None) -> str:
+        if n >= 3 and wr is not None and wr >= 0.6:
+            return "优势"
+        if n >= 3 and wr is not None and wr <= 0.4:
+            return "劣势"
+        return "均衡"
+
+    callouts = []
+    for place, v in sorted(callout_acc.items(), key=lambda kv: -(kv[1]["kills"] + kv[1]["deaths"])):
+        total = v["kills"] + v["deaths"]
+        wr = v["kills"] / total if total else None
+        callouts.append({"place": place, "kills": v["kills"], "deaths": v["deaths"],
+                         "win_rate": round(wr, 3) if wr is not None else None,
+                         "label": _label(total, wr)})
+    return {"five_dim": five_dim, "positions": positions, "callouts": callouts, "matches_analyzed": analyzed}
 
 
 @router.get("/{match_id}")

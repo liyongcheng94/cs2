@@ -92,7 +92,7 @@ function TradeTab({ d }: { d: PerfectAnalysisData }) {
   return (
     <Descriptions size="small" column={2} bordered>
       <Descriptions.Item label="补枪成功">{t.trade_kills}</Descriptions.Item>
-      <Descriptions.Item label="补枪机会">{t.trade_opportunities}</Descriptions.Item>
+      <Descriptions.Item label="补枪机会（队友死时我 ≤20m）">{t.trade_opportunities}</Descriptions.Item>
       <Descriptions.Item label="补枪率">{t.trade_opportunities ? pct(t.trade_kills / t.trade_opportunities) : "-"}</Descriptions.Item>
       <Descriptions.Item label="为队友创造补枪机会">{t.created_opportunities}</Descriptions.Item>
     </Descriptions>

@@ -22,6 +22,22 @@ from ..schemas.perfect import (
 
 TRADE_WINDOW_TICKS = 320  # 5s @ 64 tick/s
 TICKS_PER_SEC = 64
+TRADE_NEAR_METERS = 20.0     # 队友死时我 ≤20m 才算「我的补枪机会」
+TRADE_POS_WINDOW_TICKS = 128  # 位置时间线最近邻查找窗口（±2s）
+
+
+def _pos_at(positions: list[dict], sid: str, tick: int) -> tuple[float, float] | None:
+    """在采样的位置时间线里找 sid 离 tick 最近的一条（±窗口内），返回 (x, y)。"""
+    best = None
+    best_dt = TRADE_POS_WINDOW_TICKS + 1
+    for p in positions:
+        if p.get("steamid") != sid:
+            continue
+        dt = abs(int(p["tick"]) - tick)
+        if dt < best_dt:
+            best_dt = dt
+            best = (float(p["x"]), float(p["y"]))
+    return best if best_dt <= TRADE_POS_WINDOW_TICKS else None
 
 
 def _sid(x) -> str | None:
@@ -65,6 +81,7 @@ def analyze_perfect(events: dict, my_steam_id, side: str = "ALL") -> PerfectAnal
     hurts = events.get("hurts") or []
     flashes = events.get("flashes") or []
     fires = events.get("weapon_fires") or []
+    positions = events.get("positions") or []  # 有位置时间线 → 补枪机会按 ≤20m 距离过滤
 
     sel = [r for r in rounds if side == "ALL" or r.get("my_side") == side]
     starts = [int(r["start_tick"]) for r in sel]
@@ -175,6 +192,14 @@ def analyze_perfect(events: dict, my_steam_id, side: str = "ALL") -> PerfectAnal
             if victim is None or killer is None:
                 continue
             if victim in teammates and victim != my:
+                # 有位置数据时：只有队友死时我活着且在 ≤TRADE_NEAR_METERS 内才计入「我的机会」
+                if positions:
+                    vp = _pos_at(positions, victim, tick_t)
+                    mp = _pos_at(positions, my, tick_t)
+                    if vp is None or mp is None:
+                        continue
+                    if ((vp[0] - mp[0]) ** 2 + (vp[1] - mp[1]) ** 2) ** 0.5 > TRADE_NEAR_METERS:
+                        continue
                 trade.trade_opportunities += 1
                 if any(
                     _sid(k.get("attacker_steamid")) == my and _sid(k.get("user_steamid")) == killer

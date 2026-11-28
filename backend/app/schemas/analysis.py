@@ -175,8 +175,6 @@ class GridCell(BaseModel):
     label: str = "均衡"  # 优势 / 劣势 / 均衡（n<3 一律均衡）
 
 
-
-
 class RivalRow(BaseModel):
     """单场宿敌行（跨场聚合前的粒度）。"""
 
@@ -197,6 +195,15 @@ class TurnpointRound(BaseModel):
     kill_lines: list[dict] = Field(default_factory=list)
 
 
+class CalloutCell(BaseModel):
+    """定位分析具体点位单元（nav mesh place names，如 PalaceAlley/CTSpawn）。"""
+    place: str
+    kills: int = 0
+    deaths: int = 0
+    win_rate: float | None = None
+    label: str = "均衡"
+
+
 class FourDimAnalysis(BaseModel):
     schema_version: str = SCHEMA_VERSION
     match_id: str
@@ -209,6 +216,7 @@ class FourDimAnalysis(BaseModel):
     highlights: list[HighlightMoment] = Field(default_factory=list)  # 1.1：TopN 可看性时刻
     pistol_rounds: PistolRoundsDim | None = None  # 1.4：手枪局维度（第 1/13 回合）
     positions: list[GridCell] = Field(default_factory=list)  # Phase 3：3×3 定位网格
+    callouts: list[CalloutCell] = Field(default_factory=list)  # 具体点位（nav place names）
     server_ratings: ServerRatings | None = None  # 六维能力评分（demo_analyze 拉到 v1 数据后回填）
     meta: AnalysisMeta = Field(
         default_factory=lambda: AnalysisMeta(parser="unknown")

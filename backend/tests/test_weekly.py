@@ -77,6 +77,7 @@ def test_weekly_report_handler_pushes(client, monkeypatch):
         async def chat(self, system, user):
             return await fake_ai_chat(self, system, user)
 
+    client.put("/api/settings", json={"mv.enabled": "1"})  # 联动开（默认 0 会跳过推送）
     monkeypatch.setattr(wk, "_new_mv", lambda: StubMV())
     monkeypatch.setattr(wk, "build_ai_client", lambda session: StubAI())
     task = Task(id=1, type="weekly_report")
@@ -111,6 +112,7 @@ def test_weekly_ai_comment_actually_reaches_push(client, monkeypatch):
         async def chat(self, system, user):
             return MARK
 
+    client.put("/api/settings", json={"mv.enabled": "1"})  # 联动开（默认 0 会跳过推送）
     monkeypatch.setattr(wk, "_new_mv", lambda: StubMV())
     monkeypatch.setattr(wk, "build_ai_client", lambda session: StubAI())
     task = Task(id=2, type="weekly_report")
