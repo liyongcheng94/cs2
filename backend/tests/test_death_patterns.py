@@ -55,6 +55,7 @@ def test_weekly_includes_death_patterns(client, monkeypatch):
     When  weekly_report_handler
     Then  周报 Markdown 含"惯性死亡点"段落（含地图与次数）
     """
+    client.put("/api/settings", json={"mv.enabled": "1"})  # 联动开（默认 0 跳过推送）
     import app.services.weekly as wk
     from app.services.mindvault_client import MindVaultClient
 

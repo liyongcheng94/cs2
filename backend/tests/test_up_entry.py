@@ -38,6 +38,8 @@ def test_bili_learn_up_mid_path(client, monkeypatch):
     When  执行 bili_learn（up_mid）
     Then  学到 UP 最新投稿并推送
     """
+
+    client.put("/api/settings", json={"mv.enabled": "1"})  # 联动开（默认 0 跳过推送）
     import app.services.bili_learn as bl
 
     async def fake_up(mid, sess, limit=3):
@@ -78,6 +80,8 @@ def test_bili_learn_generates_flashcards_for_new_note(client, monkeypatch):
     When  bili_learn 新建总结
     Then  追加调用 /api/flashcards/generate（SRS 由 MindVault 管）
     """
+
+    client.put("/api/settings", json={"mv.enabled": "1"})  # 联动开（默认 0 跳过推送）
     import json as _json
 
     import httpx as _httpx

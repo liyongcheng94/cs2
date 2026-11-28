@@ -83,6 +83,7 @@ async def test_bili_learn_handler_degraded_flow(client, monkeypatch, tmp_path):
     When  执行 bili_learn（keyword）
     Then  BiliVideo 落库 subtitle 状态、MindVault 推送桩被调
     """
+    client.put("/api/settings", json={"mv.enabled": "1"})  # 联动开（默认 0 跳过推送）
     import app.services.bili_learn as bl
 
     async def fake_search(keyword, sess, page=1):

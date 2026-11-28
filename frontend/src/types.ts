@@ -38,6 +38,12 @@ export interface FourDimAnalysisShape {
     kills: number; headshots: number; score?: number | null; label?: string | null;
     round_won?: boolean | null; clutch?: boolean | null;
   }[];
+  rivals?: { opponent_id: string; opponent_name?: string; i_killed_them?: number; they_killed_me?: number }[];
+  turnpoints?: {
+    round_no: number; winner_side?: string; score?: string; reason?: string;
+    kills?: number; kill_lines?: Record<string, unknown>[];
+  }[];
+  callouts?: { place: string; kills: number; deaths: number; win_rate: number | null; label: string }[];
   meta?: { parser?: string; cost_s?: number | null; peak_mem_mb?: number | null };
 }
 

@@ -78,6 +78,7 @@ def test_bili_learn_bvid_full_ai_path(client, monkeypatch):
     When  执行 bili_learn
     Then  视频信息回填（title/owner）、道具卡入库（source_hash 幂等键）、总结推送并回写 mv_uuid
     """
+    client.put("/api/settings", json={"mv.enabled": "1"})  # 联动开（默认 0 跳过推送）
     _install_stubs(monkeypatch, AI_JSON, "字幕正文", StubMV())
     out = _run({"bvid": "BV1GJ411x7h7"})
     assert out["count"] == 1
