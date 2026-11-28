@@ -83,3 +83,29 @@ def test_acquire_demo_missing_raises(client_demo_dir, tmp_path):
     """
     with pytest.raises(DemoNotAvailableError):
         acquire_demo("PVP@9999999999999999999", cache_dir=tmp_path / "cache")
+
+
+def test_prune_demos_keeps_recent(client_demo_dir, tmp_path, monkeypatch):
+    """
+    Given 缓存目录有 25 份已解析 .dem（mtime 新旧交错）
+    When  prune_demos(keep=20)
+    Then  删最旧 5 份，最近 20 份保留；客户端 zip 原件不受影响
+    """
+    import os
+
+    from app.services.demo_dl import prune_demos
+
+    cache = tmp_path / "demos-cache"
+    cache.mkdir()
+    now = __import__("time").time()
+    for i in range(25):
+        f = cache / f"9215{i:04d}_0.dem"
+        f.write_bytes(b"d")
+        ts = now - (25 - i) * 3600
+        os.utime(f, (ts, ts))
+
+    removed = prune_demos(cache_dir=cache, keep=20)
+    assert removed == 5
+    assert len(list(cache.glob("*.dem"))) == 20
+    # 客户端 zip 原件不受影响
+    assert client_demo_dir.joinpath("9215177922805569036_0.zip").exists()

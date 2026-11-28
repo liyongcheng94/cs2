@@ -101,3 +101,23 @@ def acquire_demo(match_id: str, cache_dir: Path | None = None) -> Path:
     raise DemoNotAvailableError(
         f"本地与客户端缓存都没有 {match_id} 的 demo；请在完美客户端「对局回放」里点开该场 demo 观看（客户端会自动下载），随后重试"
     )
+
+
+DEMO_KEEP = 20  # 保留最近 20 份已解析 .dem，更早的自动清理（客户端 zip 永不触碰，可随时重解压）
+
+
+def prune_demos(cache_dir: Path | None = None, keep: int = DEMO_KEEP) -> int:
+    """demo 缓存保留策略：按 mtime 留最近 keep 份 .dem，返回删除数。客户端 zip 原件永不触碰。"""
+    from ..config import get_data_dir
+
+    cache = cache_dir or (get_data_dir() / "demos")
+    if not cache.exists():
+        return 0
+    dems = sorted(cache.glob("*.dem"), key=lambda f: f.stat().st_mtime, reverse=True)
+    removed = 0
+    for f in dems[keep:]:
+        f.unlink()
+        removed += 1
+    if removed:
+        logger.info(f"[demo保留] 清理 {removed} 份旧 .dem（保留最近 {keep} 份）")
+    return removed
