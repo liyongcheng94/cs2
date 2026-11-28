@@ -45,6 +45,12 @@ async def lifespan(app: FastAPI):
     logger.add(get_log_dir() / "cs2hq.log", rotation="10 MB", level="DEBUG", encoding="utf-8")
     create_db_and_tables()
     seed_player_profile()
+    import asyncio as _aio
+
+    from .services.backup import run_daily_backup
+
+    backup_result = await _aio.to_thread(run_daily_backup)
+    logger.info(f"[备份] 每日快照完成 {backup_result}")
     logger.info(f"[启动] CS2HQ v{APP_VERSION} 就绪 data={get_log_dir().parent}")
     scheduler_task = None
     import os
