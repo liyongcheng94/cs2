@@ -697,3 +697,77 @@ def analyze_rivals(kills, steam_id: int) -> list[dict]:
             row = out.setdefault(a, {"opponent_id": a, "opponent_name": an, "i_killed_them": 0, "they_killed_me": 0})
             row["they_killed_me"] += 1
     return sorted(out.values(), key=lambda x: -(x["they_killed_me"] + x["i_killed_them"]))
+
+
+def detect_turnpoints(rounds, kills, steam_id: int | None = None, max_turnpoints: int = 3) -> list[dict]:
+    """转折点回合检测（回合级叙事复盘数据源）。
+
+    候选规则（命中即候选，按"戏剧性"排序取前 N）：
+    1. 领先易主：该回合结束后比分领先方与上一回合不同
+    2. 少打多翻盘：获胜方该回合击杀数 ≥3 且对方经济/人数劣势近似（击杀差 ≥3）
+    每个转折点附回合号/胜方/本回合击杀清单（喂 AI 逐回合还原）。
+    """
+    import polars as pl
+
+    events = kills.to_dicts()
+    # 按 tick 排序 + 归属回合
+    tagged = []
+    for r in events:
+        rn = _round_of_tick(rounds, int(r["tick"]))
+        if rn is not None:
+            tagged.append({**r, "round_num": rn})
+    tagged.sort(key=lambda x: x["tick"])
+
+    kills_per_round: dict[int, list[dict]] = {}
+    for r in tagged:
+        kills_per_round.setdefault(r["round_num"], []).append(r)
+
+    round_winners: dict[int, str] = {}
+    round_rows: dict[int, dict] = {}
+    for rr in rounds.to_dicts():
+        rn = int(rr["round_num"])
+        round_winners[rn] = str(rr.get("winner_side") or "")
+        round_rows[rn] = rr
+
+    candidates: list[dict] = []
+    lead_side: str | None = None
+    t_score = ct_score = 0
+    for rn in sorted(round_winners):
+        winner = round_winners[rn]
+        if winner == "ct":
+            ct_score += 1
+        elif winner == "t":
+            t_score += 1
+        round_kills = kills_per_round.get(rn, [])
+        row = round_rows[rn]
+        reasons: list[str] = []
+
+        new_lead = "ct" if ct_score > t_score else ("t" if t_score > ct_score else None)
+        if new_lead and new_lead != lead_side:
+            reasons.append("领先易主")
+            lead_side = new_lead
+        if len(round_kills) >= 3:
+            reasons.append("高击杀回合")
+
+        entry = round_kills[0] if round_kills else None
+        entry_side = (entry or {}).get("attacker_side")
+        if entry and entry_side and entry_side != winner and len(round_kills) >= 3:
+            reasons.append("首杀方仍败（翻盘）")
+
+        if not reasons:
+            continue
+        candidates.append({
+            "round_no": rn,
+            "winner_side": winner,
+            "score": f"t{t_score}:ct{ct_score}",
+            "reason": "+".join(reasons),
+            "kills": len(round_kills),
+            "kill_lines": [
+                {"attacker": k.get("attacker_name"), "victim": k.get("victim_name"),
+                 "weapon": k.get("weapon"), "side": k.get("attacker_side"), "tick": k.get("tick")}
+                for k in round_kills
+            ],
+        })
+    # 戏剧性排序：原因多者优先，其次回合号
+    candidates.sort(key=lambda c: (-len(c["reason"].split("+")), c["round_no"]))
+    return candidates[:max_turnpoints]

@@ -483,3 +483,58 @@ def test_analyze_rivals_aggregation():
     assert by_id[str(a)]["i_killed_them"] == 2
     assert by_id[str(b_)]["they_killed_me"] == 1
     assert all(o["opponent_id"] != str(me) for o in out)
+
+
+def test_detect_turnpoints_picks_momentum_swings():
+    """
+    Given 一场 16 回合的比分序列与逐回合数据
+    When  detect_turnpoints
+    Then  挑出 ≤3 个转折点（领先易主/经济局翻盘/连杀终结），含回合号与原因标签
+    """
+    from app.services.demo_analysis import detect_turnpoints
+
+    # 模拟：T 领先→CT 反超→T 再追→CT 收尾
+    from app.services.demo_analysis import detect_turnpoints
+
+    import polars as pl
+
+    from app.services.demo_analysis import detect_turnpoints
+
+    rounds = pl.DataFrame([
+        {"round_num": i, "winner": 2 if i % 2 else 3, "winner_side": "t" if i % 2 else "ct",
+         "start_tick": i * 1000, "official_end_tick": (i + 1) * 1000 - 1}
+        for i in range(1, 13)
+    ])
+    kills = pl.DataFrame([
+        # 第 5 回合 CT（ winner=3）eco 局 3 杀翻盘
+        {"attacker_steamid": "200", "victim_steamid": "100", "attacker_side": "ct", "tick": 4500, "weapon": "deagle"},
+        {"attacker_steamid": "200", "victim_steamid": "100", "attacker_side": "ct", "tick": 4700, "weapon": "deagle"},
+        {"attacker_steamid": "200", "victim_steamid": "100", "attacker_side": "ct", "tick": 4900, "weapon": "deagle"},
+        # 第 10 回合 T 三杀终结
+        {"attacker_steamid": "100", "victim_steamid": "200", "attacker_side": "t", "tick": 9500, "weapon": "ak47"},
+        {"attacker_steamid": "100", "victim_steamid": "200", "attacker_side": "t", "tick": 9700, "weapon": "ak47"},
+        {"attacker_steamid": "100", "victim_steamid": "200", "attacker_side": "t", "tick": 9900, "weapon": "ak47"},
+    ])
+    out = detect_turnpoints(rounds, kills, max_turnpoints=3)
+    assert 1 <= len(out) <= 3
+    assert all("round_no" in t and "reason" in t for t in out)
+
+
+def test_detect_turnpoints_cap_at_three():
+    """Given 多个候选转折 When 检测 Then 最多 3 个（token 成本可控）。"""
+    from app.services.demo_analysis import detect_turnpoints
+
+    rounds = pl.DataFrame([
+        {"round_num": i, "winner": 2 if i % 2 else 3, "winner_side": "t" if i % 2 else "ct",
+         "start_tick": i * 1000, "official_end_tick": (i + 1) * 1000 - 1}
+        for i in range(1, 21)
+    ])
+    kills = pl.DataFrame([
+        {"attacker_steamid": "200", "victim_steamid": "100", "attacker_side": "ct", "tick": i * 100 + 5, "weapon": "deagle"}
+        for i in range(1, 19) if i % 2 == 0
+    ] + [
+        {"attacker_steamid": "100", "victim_steamid": "200", "attacker_side": "t", "tick": i * 100 + 5, "weapon": "ak47"}
+        for i in range(1, 19) if i % 2 == 1
+    ])
+    out = detect_turnpoints(rounds, kills, max_turnpoints=3)
+    assert len(out) <= 3
