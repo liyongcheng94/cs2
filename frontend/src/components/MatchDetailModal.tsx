@@ -99,12 +99,13 @@ function OverallTab({ detail }: { detail: MatchDetail }) {
 }
 
 // ---------- AI 复盘 ----------
-function ReviewTab({ matchId }: { matchId: number }) {
+function ReviewTab({ matchId, analysis }: { matchId: number; analysis: FourDimAnalysisShape | null }) {
   const review = useQuery({
     queryKey: ["report-md", matchId],
     queryFn: () => apiGet<{ title: string; content_md: string; degraded: boolean }>(`/matches/${matchId}/report-md`),
     retry: false,
   });
+  const turnpoints = (analysis?.turnpoints ?? []) as Record<string, any>[];
   if (review.isLoading) return <Spin />;
   if (review.error) return <Text type="secondary">尚未生成复盘：在对局列表点「分析demo」</Text>;
   const html = marked.parse(review.data!.content_md) as string;
@@ -114,6 +115,23 @@ function ReviewTab({ matchId }: { matchId: number }) {
         <Text type="warning">⚠️ 本次为数据直读版（AI 未通过校验），可在设置页配好 AI 后重新分析</Text>
       ) : null}
       <div className="report-md" dangerouslySetInnerHTML={{ __html: html }} />
+      {turnpoints.length ? (
+        <div style={{ marginTop: 16 }}>
+          <Text strong>关键转折点回合</Text>
+          {turnpoints.map((t) => (
+            <div key={t.round_no} style={{ marginTop: 8, padding: "6px 10px", background: "#1a1a2e", borderRadius: 6, fontSize: 12 }}>
+              <div>
+                第 {t.round_no} 回合 · {t.reason} · 比分 {t.score} · 击杀 {t.kills}
+              </div>
+              {(t.kill_lines ?? []).map((k: Record<string, unknown>, i: number) => (
+                <div key={i} style={{ color: "#999", marginLeft: 12 }}>
+                  [{String(k.side).toUpperCase()}] {String(k.attacker_name)} 用 {String(k.weapon)} 击杀 {String(k.victim_name)}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -153,7 +171,7 @@ function Inner({ detail }: { detail: MatchDetail }) {
           { key: "util", label: "道具分析", children: <UtilityTab detail={detail} /> },
           { key: "ratings", label: "服务器评价", children: <RatingsTab detail={detail} /> },
           { key: "radar", label: "死亡雷达", children: <div><DeathScatter analysis={detail.analysis} mapEn={mapEn} /><UtilityScatter analysis={detail.analysis} mapEn={mapEn} /></div> },
-          { key: "ai", label: "AI 复盘", children: <ReviewTab matchId={m.id} /> },
+          { key: "ai", label: "AI 复盘", children: <ReviewTab matchId={m.id} analysis={detail.analysis} /> },
         ]}
       />
     </>
