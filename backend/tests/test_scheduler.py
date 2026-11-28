@@ -84,3 +84,39 @@ def test_demo_batch_creates_tasks_for_pending(client):
         demo_tasks = s.exec(select(Task).where(Task.type == "demo_analyze")).all()
         assert len(demo_tasks) == 2
         assert all(t.priority == 2 for t in demo_tasks)
+
+
+def test_orphan_pending_tasks_marked_failed(client):
+    """
+    Given 一个 created_at 超 1h 的 pending 任务
+    When  调度 tick
+    Then  该任务被标 failed（孤儿自检），且正常调度继续
+    """
+    import asyncio
+    import datetime as _dtmod
+    from datetime import datetime as dt
+
+    from sqlmodel import select
+
+    from app.database import session_factory
+    from app.models import Task
+    from app.services import task_manager
+
+
+
+    old = dt.utcnow() - _dtmod.timedelta(hours=2)
+    with session_factory() as s:
+        s.add(Task(type="dummy_ok", payload={}, status="pending", created_at=old))
+        s.commit()
+
+    from app.services.scheduler import Scheduler
+
+    sched = Scheduler(now_fn=lambda: dt.utcnow())
+    sched.tick(dt.utcnow())
+
+    with session_factory() as s:
+        t = s.exec(select(Task).where(Task.type == "dummy_ok")).first()
+        assert t.status == "failed"
+        assert "孤儿" in t.error
+
+    # 清理 dummy handler 注册避免污染

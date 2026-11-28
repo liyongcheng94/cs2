@@ -5,7 +5,7 @@ Scheduler.tick(now) 纯函数可测；run_loop 挂 lifespan 后台协程，逐�
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Callable
 
 from loguru import logger
@@ -56,6 +56,21 @@ class Scheduler:
             pending = session.exec(select(Match).where(Match.demo_status == "pending_demo")).all()
             if in_window and pending and (last_batch is None or last_batch.date() != now.date()):
                 due.append("demo_analyze_batch")
+            # 孤儿任务自检：pending 超 1h 的任务标 failed（调度循环异常残留，防静默堆积）
+            stale = session.exec(
+                select(Task).where(
+                    Task.status == "pending",
+                    Task.created_at <= utcnow() - timedelta(hours=1),
+                )
+            ).all()
+            for t in stale:
+                t.status = "failed"
+                t.error = "孤儿任务自动标失败：创建超 1h 未执行（调度循环异常残留）"
+                session.add(t)
+            if stale:
+                session.commit()
+                logger.warning(f"[调度] 清理孤儿 pending 任务 {len(stale)} 个")
+
             # 周报：周日 21:00 窗口，每周一次
             last_weekly = self.last_run.get("weekly_report")
             weekly_window = now.weekday() == WEEKLY_WEEKDAY and now.hour == WEEKLY_HOUR
