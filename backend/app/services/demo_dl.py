@@ -34,10 +34,17 @@ def client_demo_dir() -> Path:
     if appdata:
         return Path(appdata) / "Wmpvp" / "demo"
     for pattern in _WSL_DEMO_GLOBS:
-        hits = sorted(Path("/").glob(str(pattern).lstrip("/")))
+        # Windows 绝对路径（带盘符）不支持 glob → 直接探测存在性；POSIX 相对模式走 glob
+        pat_str = str(pattern).lstrip("/")
+        if ":" in pat_str:  # Windows 绝对路径
+            cand = Path(pat_str)
+            hits = [cand] if cand.exists() else []
+        else:
+            hits = sorted(Path("/").glob(pat_str))
         if hits:
             return hits[0]
-    return Path.home() / "AppData" / "Roaming" / "Wmpvp" / "demo"
+    home = os.environ.get("HOME") or str(Path.home())
+    return Path(home) / "AppData" / "Roaming" / "Wmpvp" / "demo"
 
 
 def match_id_to_client_name(match_id: str) -> str:
